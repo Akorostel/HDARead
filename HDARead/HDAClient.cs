@@ -7,10 +7,14 @@ using System.Threading.Tasks;
 using Opc;
 using OpcCom;
 
+using System.Diagnostics;
+using Microsoft.VisualBasic.Logging;
+
 namespace HDARead {
     class HDAClient {
 
         private Opc.Hda.Server _OPCServer = null;
+        static TraceSource _trace = new TraceSource("HDAClientTraceSource");
 
         // Connect to OPC HDA server
         public bool Connect(string HostName, string ServerName) {
@@ -54,9 +58,14 @@ namespace HDARead {
             return true;
         }
 
-        public bool Read(string StartTime, string EndTime, List<string> Tagnames, int AggregateID) {
+        public bool Read(string StartTime,
+                         string EndTime,
+                         string[] Tagnames,
+                         int AggregateID,
+                         int MaxValues,
+                         int ResampleInterval,
+                         out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             var OPCTrend = new Opc.Hda.Trend(_OPCServer);
-            int i;
             //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
             //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
             //exception will be fired only when ReadProcessed is called.
@@ -79,58 +88,37 @@ namespace HDARead {
             //Debug.Print("From " & StartTime.Val & " " & OPCTrend.StartTime.ToString & ", IsRelative: " & OPCTrend.StartTime.IsRelative)
             //Debug.Print("To " & EndTime.Val & " " & OPCTrend.EndTime.ToString & ", IsRelative: " & OPCTrend.EndTime.IsRelative)
 
-            OPCTrend.MaxValues = 10;
-            OPCTrend.ResampleInterval = 0; // return just one value (see OPC HDA spec.)
+            OPCTrend.MaxValues = MaxValues;
+            OPCTrend.ResampleInterval = ResampleInterval; // return just one value (see OPC HDA spec.)
+            OPCTrend.Items.Clear();
+            OPCHDAItemValues = null;
+            
+            try {
+                for (int i = 0; i < Tagnames.Count(); i++) {
+                    OPCTrend.AddItem(new Opc.ItemIdentifier(Tagnames[i]));
+                    OPCTrend.Items[i].AggregateID = AggregateID;
+                }
+                OPCHDAItemValues = OPCTrend.ReadProcessed();
 
-            Opc.Hda.ItemValueCollection OPCHDAItemValues[] = null;
-
-            foreach (string tag in Tagnames) {
-                OPCTrend.Items.Clear();
-                try {
-                    OPCTrend.AddItem(new Opc.ItemIdentifier(tag));
-                    OPCTrend.Items[0].AggregateID = AggregateID;
-
-                    OPCHDAItemValues = OPCTrend.ReadProcessed();
-
-                    //Debug.Print(OPCHDAItemValues(0).ItemName, OPCHDAItemValues(0).ResultID.Name)
-                    if ((OPCHDAItemValues[0][0].Value!=null) && (OPCHDAItemValues[0].ResultID == Opc.ResultID.S_OK) {
-                        ArrResults(i) = CSng(OPCHDAItemValues(0)(0).Value)
-                        'Convert timestamp according to OutputTimestampFormat
-                        If OutputTimestampFormat.Val = "" Then
-                            ArrTimestamps(i) = OPCHDAItemValues(0)(0).Timestamp.ToString
-                        Else
-                            ArrTimestamps(i) = OPCHDAItemValues(0)(0).Timestamp.ToString(OutputTimestampFormat.Val)
-                        End If
-                        ArrQualities(i) = OPCHDAItemValues(0)(0).Quality.ToString
-                    } else {
-                        //TraceS("History2: item " & i & " " & ArrTagnames(i) & ": ResultID=" & OPCHDAItemValues(0).ResultID.ToString)
-                        ArrResults(i) = Single.NaN
-                        ArrTimestamps(i) = ""
-                        ArrQualities(i) = "ERROR"
-                    }
-                 } catch (Exception e) {
-                    //TraceS("EXCEPTION", "History2: item " & i & " " & ArrTagnames(i) & ": " & ex.Message, True)
-                    /*'TraceException("History2: item " & i & " " & ArrTagnames(i), ex, True)
-                    If ArrUseLGV(i) = urtNOYES.uNO Then
-                        ArrResults(i) = Single.NaN
-                        ArrTimestamps(i) = ""
-                        ArrQualities(i) = "ERROR"
-                    End If*/
-                 }
+            } catch (Exception e) {
+                //TraceS("EXCEPTION", "History2: item " & i & " " & ArrTagnames(i) & ": " & ex.Message, True)
+                /*'TraceException("History2: item " & i & " " & ArrTagnames(i), ex, True)
+                If ArrUseLGV(i) = urtNOYES.uNO Then
+                    ArrResults(i) = Single.NaN
+                    ArrTimestamps(i) = ""
+                    ArrQualities(i) = "ERROR"
+                End If*/
             }
 
             return true;
         }
 
-        /*
-
-
-
-
-            'Write arrays
-            Results.PutArray(ArrResults, sErr)
-            Timestamps.PutArray(ArrTimestamps, sErr)
-            Qualities.PutArray(ArrQualities, sErr)
-        */
+        public void Disconnect() {
+            if (_OPCServer != null) {
+                if (_OPCServer.IsConnected)
+                    _OPCServer.Disconnect();
+                _OPCServer.Dispose();
+            }
+        }
     }
 }
