@@ -13,8 +13,37 @@ using Microsoft.VisualBasic.Logging;
 namespace HDARead {
     class HDAClient {
 
+
         private Opc.Hda.Server _OPCServer = null;
         static TraceSource _trace = new TraceSource("HDAClientTraceSource");
+
+        public enum OPCHDA_AGGREGATE {
+            ANNOTATIONS = 24,
+            WORSTQUALITY = 23,
+            PERCENTBAD = 22,
+            PERCENTGOOD = 21,
+            DURATIONBAD = 20,
+            DURATIONGOOD = 19,
+            RANGE = 18,
+            VARIANCE = 17,
+            REGDEV = 16,
+            REGCONST = 15,
+            REGSLOPE = 14,
+            DELTA = 13,
+            END = 12,
+            START = 11,
+            MAXIMUM = 10,
+            MAXIMUMACTUALTIME = 9,
+            MINIMUM = 8,
+            MINIMUMACTUALTIME = 7,
+            STDEV = 6,
+            COUNT = 5,
+            TIMEAVERAGE = 4,
+            AVERAGE = 3,
+            TOTAL = 2,
+            INTERPOLATIVE = 1,
+            NOAGGREGATE = 0
+        }
 
         // Connect to OPC HDA server
         public bool Connect(string HostName, string ServerName) {
@@ -84,12 +113,11 @@ namespace HDARead {
                 OPCTrend.StartTime = new Opc.Hda.Time(StartTime);
                 OPCTrend.EndTime = new Opc.Hda.Time(EndTime);
             }
-
-            //Debug.Print("From " & StartTime.Val & " " & OPCTrend.StartTime.ToString & ", IsRelative: " & OPCTrend.StartTime.IsRelative)
-            //Debug.Print("To " & EndTime.Val & " " & OPCTrend.EndTime.ToString & ", IsRelative: " & OPCTrend.EndTime.IsRelative)
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "From {0} {1}, IsRelative: {2}", StartTime, OPCTrend.StartTime.ToString(), OPCTrend.StartTime.IsRelative);
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "To   {0} {1}, IsRelative: {2}", EndTime, OPCTrend.EndTime.ToString(), OPCTrend.EndTime.IsRelative);
 
             OPCTrend.MaxValues = MaxValues;
-            OPCTrend.ResampleInterval = ResampleInterval; // return just one value (see OPC HDA spec.)
+            OPCTrend.ResampleInterval = ResampleInterval; // 0 - return just one value (see OPC HDA spec.)
             OPCTrend.Items.Clear();
             OPCHDAItemValues = null;
             
@@ -99,18 +127,23 @@ namespace HDARead {
                     OPCTrend.Items[i].AggregateID = AggregateID;
                 }
                 OPCHDAItemValues = OPCTrend.ReadProcessed();
-
+                return true;
+            } catch (Opc.ResultIDException e) {
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "Opc.ResultIDException:" + e.Message);
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "Opc.ResultIDException:" + e.ToString());
+                return false;
             } catch (Exception e) {
-                //TraceS("EXCEPTION", "History2: item " & i & " " & ArrTagnames(i) & ": " & ex.Message, True)
-                /*'TraceException("History2: item " & i & " " & ArrTagnames(i), ex, True)
-                If ArrUseLGV(i) = urtNOYES.uNO Then
-                    ArrResults(i) = Single.NaN
-                    ArrTimestamps(i) = ""
-                    ArrQualities(i) = "ERROR"
-                End If*/
-            }
-
-            return true;
+                _trace.TraceEvent(TraceEventType.Verbose, 0, e.Message);
+                _trace.TraceEvent(TraceEventType.Verbose, 0, e.GetType().ToString());
+                
+                if (e.Data.Count > 0) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "  Extra details:");
+                    foreach (System.Collections.DictionaryEntry de in e.Data)
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "    Key: {0,-20}      Value: {1}",
+                                          "'" + de.Key.ToString() + "'", de.Value);
+                }
+                return false;
+            }            
         }
 
         public void Disconnect() {
