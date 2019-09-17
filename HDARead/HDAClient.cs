@@ -98,23 +98,28 @@ namespace HDARead {
             //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
             //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
             //exception will be fired only when ReadProcessed is called.
+
             try {
-                DateTime StartDateTime, EndDateTime;
+                DateTime StartDateTime;
                 //Try to parse date and time. If it is in relative time format (for example NOW-30D),
                 //exception will be generated
                 StartDateTime = DateTime.Parse(StartTime);
-                EndDateTime = DateTime.Parse(EndTime);
                 //No exception => date and time in absolute format, pass them to Opc.Hda.Time constructor as DateTime
                 OPCTrend.StartTime = new Opc.Hda.Time(StartDateTime);
-                OPCTrend.EndTime = new Opc.Hda.Time(EndDateTime);
-            } catch (Exception e) {
+            } catch (FormatException e) {
                 //Exception fired => Date and time in relative format.
                 //Pass them to Opc.Hda.Time constructor as strings
                 OPCTrend.StartTime = new Opc.Hda.Time(StartTime);
+            }
+            try {
+                DateTime EndDateTime;
+                EndDateTime = DateTime.Parse(EndTime);
+                OPCTrend.EndTime = new Opc.Hda.Time(EndDateTime);
+            } catch (FormatException e) {
                 OPCTrend.EndTime = new Opc.Hda.Time(EndTime);
             }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "From {0} {1}, IsRelative: {2}", StartTime, OPCTrend.StartTime.ToString(), OPCTrend.StartTime.IsRelative);
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "To   {0} {1}, IsRelative: {2}", EndTime, OPCTrend.EndTime.ToString(), OPCTrend.EndTime.IsRelative);
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "From timestamp {0} was recognized as {1}, IsRelative: {2}", StartTime, OPCTrend.StartTime.ToString(), OPCTrend.StartTime.IsRelative);
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "To   timestamp {0} was recognized as {1}, IsRelative: {2}", EndTime, OPCTrend.EndTime.ToString(), OPCTrend.EndTime.IsRelative);
 
             OPCTrend.MaxValues = MaxValues;
             OPCTrend.ResampleInterval = ResampleInterval; // 0 - return just one value (see OPC HDA spec.)
