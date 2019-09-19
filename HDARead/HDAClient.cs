@@ -134,12 +134,12 @@ namespace HDARead {
                 OPCHDAItemValues = OPCTrend.ReadProcessed();
                 return true;
             } catch (Opc.ResultIDException e) {
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "Opc.ResultIDException:" + e.Message);
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "Opc.ResultIDException:" + e.ToString());
+                _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.Message);
+                _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
                 return false;
             } catch (Exception e) {
-                _trace.TraceEvent(TraceEventType.Verbose, 0, e.Message);
-                _trace.TraceEvent(TraceEventType.Verbose, 0, e.GetType().ToString());
+                _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
+                _trace.TraceEvent(TraceEventType.Error, 0, e.GetType().ToString());
                 
                 if (e.Data.Count > 0) {
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "  Extra details:");

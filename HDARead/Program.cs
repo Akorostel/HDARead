@@ -15,16 +15,16 @@ using Microsoft.VisualBasic.Logging;
 using System.IO;
 
 /* TODO:
- * aggregate enum
- * resample interval
- * file output
- * quality flag
+ * +aggregate enum
+ * +resample interval
+ * +file output
  * exceptions
  * read raw
- * input file with tag list
+ * +input file with tag list
  * maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
  * command line parameter to display output quality or not
  * command line parameter to 'merged' output format (single timestamp column for all tags)
+ * OutputTable: What if different tags have different number of points?!
  */
 
 namespace HDARead {
@@ -47,6 +47,7 @@ namespace HDARead {
             int MaxValues = 10;
             int ResampleInterval = 0;
             string OutputFileName = null;
+            string InputFileName = null;
             bool show_help = false;
             eOutputFormat OutputFormat = eOutputFormat.LIST;
 
@@ -69,6 +70,8 @@ namespace HDARead {
                                                                                 v => OutputFormat = GetOutputFormat(v)},
                 { "o=|output=",             "Output filename (if omitted, output to console)",   
                                                                                 v => OutputFileName = v},
+                { "i=|input=",              "Input filename with list of tags (if omitted, tag list must be provided as command line argument)",   
+                                                                                v => InputFileName = v},
                 { "h|?|help",               "Show help",                        v => show_help = v != null },
                 { "<>",                     "List of tag names",                v => Tagnames.Add (v)},
             };
@@ -92,9 +95,21 @@ namespace HDARead {
                 return;
             }
 
-            if (Tagnames.Count()<1) {
-                Console.WriteLine("No tagnames were specified.");
-                return;
+            if (string.IsNullOrEmpty(InputFileName)) {
+                if (Tagnames.Count() < 1) {
+                    Console.WriteLine("No tagnames were specified.");
+                    return;
+                }
+            } else {
+                if (Tagnames.Count() > 0 ) {
+                    Console.WriteLine("If the input file is specified, no tags may be entered as command line argument");
+                    return;
+                }
+                Tagnames = File.ReadLines(InputFileName).ToList();
+                if (Tagnames.Count() < 1) {
+                    Console.WriteLine("No tagnames were specified.");
+                    return;
+                }
             }
 
             Console.WriteLine("HDARead is going to:");
@@ -182,26 +197,45 @@ namespace HDARead {
             }
         }
         static void OutputTable(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues, string OutputTimestampFormat) {
-            string ts;
             // header
-            sw.Write("Timestamp {0},Value {0},Quality {0}", OPCHDAItemValues[0].ItemName);
+            sw.Write("{0} timestamp, {0} value, {0} quality", OPCHDAItemValues[0].ItemName);
             for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                sw.Write(",Timestamp {0},Value {0},Quality {0}", OPCHDAItemValues[i].ItemName);
+                sw.Write(",{0} timestamp, {0} value, {0} quality", OPCHDAItemValues[i].ItemName);
             }
             sw.WriteLine();
-            for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
-                for (int j = 0; j < OPCHDAItemValues[i].Count; j++) {
-                    if (OutputTimestampFormat != null) {
-                        ts = OPCHDAItemValues[i][j].Timestamp.ToString();
-                    } else {
-                        ts = OPCHDAItemValues[i][j].Timestamp.ToString(OutputTimestampFormat);
-                    }
-                    sw.WriteLine("{0},{1},{2}", ts, OPCHDAItemValues[i][j].Value.ToString(), OPCHDAItemValues[i][j].Quality.ToString());
+            string ts;
+            // What if different tags have different number of points?!
+            for (int j = 0; j < OPCHDAItemValues[0].Count; j++) {
+                ts = GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, OutputTimestampFormat);
+                sw.Write("{0},{1},{2}", ts, OPCHDAItemValues[0][j].Value.ToString(), OPCHDAItemValues[0][j].Quality.ToString());
+                for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
+                    ts = GetDatetimeStr(OPCHDAItemValues[i][j].Timestamp, OutputTimestampFormat);
+                    sw.Write(",{0},{1},{2}", ts, OPCHDAItemValues[i][j].Value.ToString(), OPCHDAItemValues[i][j].Quality.ToString());
                 }
+                sw.WriteLine();
             }
         }
         static void OutputMerged(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues, string OutputTimestampFormat) {
-
+            // header
+            sw.Write("Timestamp, {0} value, {0} quality", OPCHDAItemValues[0].ItemName);
+            for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
+                sw.Write(",{0} value, {0} quality", OPCHDAItemValues[i].ItemName);
+            }
+            sw.WriteLine();
+            string ts;
+            // What if different tags have different number of points?!
+            for (int j = 0; j < OPCHDAItemValues[0].Count; j++) {
+                ts = GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, OutputTimestampFormat);
+                sw.Write("{0},{1},{2}", ts, OPCHDAItemValues[0][j].Value.ToString(), OPCHDAItemValues[0][j].Quality.ToString());
+                for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
+                    if (OPCHDAItemValues[i][j].Timestamp != OPCHDAItemValues[0][j].Timestamp) {
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Timestamp {0} of tag {1} at row {2} is not equal to timestamp {3} of tag {4}",
+                            OPCHDAItemValues[i][j].Timestamp, OPCHDAItemValues[i].ItemName, j, OPCHDAItemValues[0][j].Timestamp, OPCHDAItemValues[0].ItemName);
+                    }
+                    sw.Write(",{0},{1}", OPCHDAItemValues[i][j].Value.ToString(), OPCHDAItemValues[i][j].Quality.ToString());
+                }
+                sw.WriteLine();
+            }
         }
         static void ShowHelp(OptionSet p) {
             Console.WriteLine("Usage: HDARead OPTIONS tag1 tag2 tag3");
@@ -235,6 +269,16 @@ namespace HDARead {
                 return Value;
             else
                 throw new NDesk.Options.OptionException("Wrong output format:: " + str, "-f");
+        }
+
+        static string GetDatetimeStr(DateTime dt, string fmt) {
+            string ts;
+            if (string.IsNullOrEmpty(fmt)) {
+                ts = dt.ToString();
+            } else {
+                ts = dt.ToString(fmt);
+            }
+            return ts;
         }
     }
 }
