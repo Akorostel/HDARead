@@ -93,7 +93,21 @@ namespace HDARead {
                          int AggregateID,
                          int MaxValues,
                          int ResampleInterval,
+                         bool read_raw,
                          out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
+            
+            // Check if tags exist
+            var ItemIds = new Opc.ItemIdentifier[Tagnames.Count()];
+            for (int i = 0; i < Tagnames.Count(); i++) {
+                ItemIds[i] =  new Opc.ItemIdentifier(Tagnames[i]);
+            }
+            var res = _OPCServer.ValidateItems(ItemIds);
+            for (int i = 0; i < Tagnames.Count(); i++) {
+                if (!res[i].ResultID.Succeeded()) {
+                    _trace.TraceEvent(TraceEventType.Error, 0, "Tag {0} is not valid: Result_ID={1}, DiagnosticInfo={2}", Tagnames[i], res[i].ResultID.ToString(), res[i].DiagnosticInfo);
+                }
+            }
+
             var OPCTrend = new Opc.Hda.Trend(_OPCServer);
             //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
             //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
@@ -131,7 +145,10 @@ namespace HDARead {
                     OPCTrend.AddItem(new Opc.ItemIdentifier(Tagnames[i]));
                     OPCTrend.Items[i].AggregateID = AggregateID;
                 }
-                OPCHDAItemValues = OPCTrend.ReadProcessed();
+                if (read_raw)
+                    OPCHDAItemValues = OPCTrend.ReadRaw();
+                else
+                    OPCHDAItemValues = OPCTrend.ReadProcessed();
                 return true;
             } catch (Opc.ResultIDException e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.Message);

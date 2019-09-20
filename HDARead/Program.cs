@@ -19,9 +19,10 @@ using System.IO;
  * +resample interval
  * +file output
  * exceptions
- * read raw
+ * +read raw
  * +input file with tag list
  * maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
+ *    or maybe validate tags before read and delete them from query?
  * command line parameter to display output quality or not
  * command line parameter to 'merged' output format (single timestamp column for all tags)
  * OutputTable: What if different tags have different number of points?!
@@ -48,6 +49,7 @@ namespace HDARead {
             int ResampleInterval = 0;
             string OutputFileName = null;
             string InputFileName = null;
+            bool read_raw = false;
             bool show_help = false;
             eOutputFormat OutputFormat = eOutputFormat.LIST;
 
@@ -63,6 +65,8 @@ namespace HDARead {
    	            { "a=|agg=",                "Aggregate (see spec)",             v => Aggregate = GetHDAAggregate(v) },
                 { "r=|resample=",           "Resample interval (in seconds), 0 - return just one value (see OPC HDA spec.)",  
                                                                                 v => ResampleInterval = Int32.Parse(v)},
+                { "raw",                    "Read raw data (if omitted, read processed data) ",  
+                                                                                v => read_raw = v != null},
                 { "m=|maxvalues=",          "Maximum number of values to load (should be checked at OPC server side, but doesn't work)", 
                                                                                 v => MaxValues = Int32.Parse(v)},
                 { "t=|tsformat=",           "Output timestamp format to use",   v => OutputTimestampFormat = v},
@@ -114,7 +118,7 @@ namespace HDARead {
 
             Console.WriteLine("HDARead is going to:");
             Console.WriteLine("\t connect to OPC HDA server named '{0}' on computer '{1}'", Server, Host);
-            Console.WriteLine("\t and get data for the period from '{0}' to '{1}'", StartTime, EndTime);
+            Console.WriteLine("\t and read {0} data for the period from '{1}' to '{2}'", read_raw?"raw":"processed", StartTime, EndTime);
             Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval, EndTime);
             Console.WriteLine("\t for the following tags:");
             foreach (string t in Tagnames) {
@@ -129,7 +133,7 @@ namespace HDARead {
                 _trace.TraceEvent(TraceEventType.Verbose, 0, "Created HDAClient");
                 if (srv.Connect(Host, Server)) {
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "Connected. Going to read.");
-                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, out OPCHDAItemValues);
+                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, read_raw, out OPCHDAItemValues);
                 } else {
                     Console.WriteLine("HDARead unable to connect to OPC server.");
                 }
