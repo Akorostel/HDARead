@@ -57,30 +57,30 @@ namespace HDARead {
             try {
                 var fact = new OpcCom.Factory();
                 if (_OPCServer == null) {
-                    //TraceS("History2: _OPCServer Is Nothing, creating new object, trying to connect")
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "_OPCServer Is Nothing, creating new object, trying to connect");
                     _OPCServer = new Opc.Hda.Server(fact, null);
                     _OPCServer.Connect(url, new Opc.ConnectData(new System.Net.NetworkCredential(), null));
                     if (_OPCServer.IsConnected) {
-                        //TraceS("History2: succesfully connected to: " & url.ToString & ", obj: " & _OPCServer.GetHashCode().ToString)
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
                     }
                 }
                 //If connection was lost
                 if (!_OPCServer.IsConnected) {
-                    //TraceS("History2: OPC server is disconnected, trying to connect")
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server is disconnected, trying to connect");
                     //Unfortunately, in case of lost connection simply calling .Connect() doesn't work :(
                     //Let's try to recreate the object from scratch
                     _OPCServer.Dispose();
                     _OPCServer = new Opc.Hda.Server(fact, null);
                     _OPCServer.Connect(url, new Opc.ConnectData(new System.Net.NetworkCredential(), null));
                     if (_OPCServer.IsConnected) {
-                        //TraceS("History2: succesfully connected to: " & url.ToString & ", obj: " & _OPCServer.GetHashCode().ToString)
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
                     } else {
-                        //TraceS("EXCEPTION", "History2: connection failed without exception: " & url.ToString, True)
+                        _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed without exception: {0}", url.ToString());
                         return false;
                     }
                 }
             } catch (Exception e) {
-                //TraceS("EXCEPTION", "History2: connection failed: " & url.ToString & ", " & ex.Message, True)
+                _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed: {0}, {1}", url.ToString(), e.Message);
                 return false;
             }
 
@@ -112,7 +112,6 @@ namespace HDARead {
             //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
             //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
             //exception will be fired only when ReadProcessed is called.
-
             try {
                 DateTime StartDateTime;
                 //Try to parse date and time. If it is in relative time format (for example NOW-30D),
@@ -120,7 +119,7 @@ namespace HDARead {
                 StartDateTime = DateTime.Parse(StartTime);
                 //No exception => date and time in absolute format, pass them to Opc.Hda.Time constructor as DateTime
                 OPCTrend.StartTime = new Opc.Hda.Time(StartDateTime);
-            } catch (FormatException e) {
+            } catch (FormatException) {
                 //Exception fired => Date and time in relative format.
                 //Pass them to Opc.Hda.Time constructor as strings
                 OPCTrend.StartTime = new Opc.Hda.Time(StartTime);
@@ -129,7 +128,7 @@ namespace HDARead {
                 DateTime EndDateTime;
                 EndDateTime = DateTime.Parse(EndTime);
                 OPCTrend.EndTime = new Opc.Hda.Time(EndDateTime);
-            } catch (FormatException e) {
+            } catch (FormatException) {
                 OPCTrend.EndTime = new Opc.Hda.Time(EndTime);
             }
             _trace.TraceEvent(TraceEventType.Verbose, 0, "From timestamp {0} was recognized as {1}, IsRelative: {2}", StartTime, OPCTrend.StartTime.ToString(), OPCTrend.StartTime.IsRelative);
@@ -153,6 +152,15 @@ namespace HDARead {
             } catch (Opc.ResultIDException e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.Message);
                 _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
+
+                // anyway, let's try to examine data
+                if (OPCHDAItemValues == null) {
+                    _trace.TraceEvent(TraceEventType.Error, 0, "OPCHDAItemValues == null");
+                } else {
+                    foreach (Opc.Hda.ItemValueCollection item in OPCHDAItemValues) {
+                        _trace.TraceEvent(TraceEventType.Error, 0, "For tag {0}  the ResultID is {1}", item.ItemName, item.ResultID.ToString());
+                    }
+                }
                 return false;
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
