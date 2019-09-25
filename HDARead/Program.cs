@@ -25,8 +25,9 @@ using System.IO;
  * maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
  *    or maybe validate tags before read and delete them from query?
  * command line parameter to display output quality or not
- * command line parameter to 'merged' output format (single timestamp column for all tags)
+ * +command line parameter to 'merged' output format (single timestamp column for all tags)
  * OutputTable: What if different tags have different number of points?!
+ * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
  */
 
 namespace HDARead {
