@@ -13,9 +13,10 @@ using Microsoft.VisualBasic.Logging;
 namespace HDARead {
     class HDAClient {
 
-
         private Opc.Hda.Server _OPCServer = null;
-        static TraceSource _trace = new TraceSource("HDAClientTraceSource");
+        
+        // TraceSource is made public in order to be able to switch verbosity from the caller
+        public TraceSource _trace = new TraceSource("HDAClientTraceSource");
 
         public enum OPCHDA_AGGREGATE {
             ANNOTATIONS = 24,
@@ -178,8 +179,12 @@ namespace HDARead {
 
         public void Disconnect() {
             if (_OPCServer != null) {
-                if (_OPCServer.IsConnected)
+                if (_OPCServer.IsConnected) {
                     _OPCServer.Disconnect();
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Sucessfully disconnected from OPC HDA server.");
+                } else {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC HDA server is unexpectedly disconnected");
+                }
                 _OPCServer.Dispose();
             }
         }
