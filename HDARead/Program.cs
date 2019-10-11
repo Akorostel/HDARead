@@ -28,8 +28,12 @@ using System.IO;
  * +command line parameter to 'merged' output format (single timestamp column for all tags)
  * OutputTable: What if different tags have different number of points?!
  * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
+ * better merge algorithm?
+ * header is shifted by one column in TABLE mode
  * + option to toggle debug output
  * check if 'MaxValues' work. If not - delete it.
+ * trying to get data for the whole month - E_MAXEXCEEDED
+ * if output file already exists: overwrite or do nothing
  */
 
 namespace HDARead {
@@ -54,6 +58,7 @@ namespace HDARead {
         static string OutputTimestampFormat = null;
         static int MaxValues = 10;
         static int ResampleInterval = 0;
+        static bool IncludeBounds = true; // 
         static string OutputFileName = null;
         static string InputFileName = null;
         static bool ReadRaw = false;
@@ -76,21 +81,18 @@ namespace HDARead {
             }
             ShowInfo();
 
+            var srv = new HDAClient(_trace.Switch);
+
             Opc.Hda.ItemValueCollection[] OPCHDAItemValues = null;
             try {
                 bool res = false;
-                var srv = new HDAClient();
-                // copy verbosity level 
-                srv._trace.Switch = _trace.Switch;
-
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "Created HDAClient");
                 if (srv.Connect(Host, Server)) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Connected. Going to read.");
-                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, ReadRaw, out OPCHDAItemValues);
+                    srv.Validate(Tagnames);
+                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
+                    //res = srv.ReadTrend(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
                 } else {
                     Console.WriteLine("HDARead unable to connect to OPC server.");
                 }
-                srv.Disconnect();
                 if (!res) {
                     Console.WriteLine("HDARead Error.");
                     return;
@@ -98,41 +100,21 @@ namespace HDARead {
             } catch (Exception e) {
                 Console.WriteLine(e.Message);
                 return;
+            } finally {
+                srv.Disconnect();
             }
+
             if (OPCHDAItemValues == null) {
                 Console.WriteLine("HDARead returned null.");
                 return;
             } else {
+                Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("HDARead OK.");
-            }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of tags = OPCHDAItemValues.Count()={0}", OPCHDAItemValues.Count());
-
-            StreamWriter writer;
-            if (!string.IsNullOrEmpty(OutputFileName)) {
-                writer = new StreamWriter(OutputFileName);
-            } else {
-                writer = new StreamWriter(Console.OpenStandardOutput());
-                writer.AutoFlush = true;
-                Console.SetOut(writer);
+                Console.ResetColor();
             }
 
-            switch (OutputFormat) {
-                case eOutputFormat.LIST:
-                    OutputList(writer, OPCHDAItemValues);
-                    break;
-                case eOutputFormat.MERGED:
-                    OutputMerged(writer, Merge(OPCHDAItemValues));
-                    break;
-                case eOutputFormat.TABLE:
-                    OutputTable(writer, OPCHDAItemValues);
-                    break;
-            }
-
-            if (!string.IsNullOrEmpty(OutputFileName)) {
-                writer.Close();
-                Console.WriteLine("Data were written to file {0}.", OutputFileName);
-            }
-            
+            WriteOutput(OPCHDAItemValues);
+           
             return;
         }
 
@@ -150,8 +132,10 @@ namespace HDARead {
                                                                                 v => ResampleInterval = Int32.Parse(v)},
                 { "raw",                    "Read raw data (if omitted, read processed data) ",  
                                                                                 v => ReadRaw = v != null},
-                { "m=|maxvalues=",          "Maximum number of values to load (should be checked at OPC server side, but doesn't work)", 
+                { "m=|maxvalues=",          "Maximum number of values to load (only for raw data)", 
                                                                                 v => MaxValues = Int32.Parse(v)},
+                { "b|bounds",               "Whether the bounding item values should be returned (only for ReadRaw).",  
+                                                                                v => IncludeBounds = v != null},
                 { "t=|tsformat=",           "Output timestamp format to use",   v => OutputTimestampFormat = v},
                 { "f=",                     "Output format (LIST or TABLE or MERGED)",   
                                                                                 v => OutputFormat = GetOutputFormat(v)},
@@ -229,12 +213,51 @@ namespace HDARead {
             Console.WriteLine("HDARead is going to:");
             Console.WriteLine("\t connect to OPC HDA server named '{0}' on computer '{1}'", Server, Host);
             Console.WriteLine("\t and read {0} data for the period from '{1}' to '{2}'", ReadRaw ? "raw" : "processed", StartTime, EndTime);
-            Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval, EndTime);
+            if (!ReadRaw)
+                Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval, EndTime);
             Console.WriteLine("\t for the following tags:");
             foreach (string t in Tagnames) {
                 Console.WriteLine("\t\t" + t);
             }
-            Console.WriteLine("\t No more than {0} values should be loaded (checked only at OPC server side).", MaxValues);
+            if (ReadRaw)
+                Console.WriteLine("\t No more than {0} values for each tag should be loaded.", MaxValues);
+        }
+
+        static bool WriteOutput(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
+            StreamWriter writer=null;
+            try {
+                if (!string.IsNullOrEmpty(OutputFileName)) {
+                    writer = new StreamWriter(OutputFileName);
+                } else {
+                    writer = new StreamWriter(Console.OpenStandardOutput());
+                    writer.AutoFlush = true;
+                    Console.SetOut(writer);
+                }
+
+                switch (OutputFormat) {
+                    case eOutputFormat.LIST:
+                        OutputList(writer, OPCHDAItemValues);
+                        break;
+                    case eOutputFormat.MERGED:
+                        OutputMerged(writer, Merge(OPCHDAItemValues));
+                        break;
+                    case eOutputFormat.TABLE:
+                        OutputTable(writer, OPCHDAItemValues);
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(OutputFileName)) {
+                    Console.WriteLine("Data were written to file {0}.", OutputFileName);
+                }
+                return true;
+            } catch (Exception e) {
+                _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
+                return false;
+            } finally {
+                if (!string.IsNullOrEmpty(OutputFileName) && (writer!=null) ) {
+                    writer.Close();
+                }
+            }
         }
 
         // Output format: list
