@@ -299,7 +299,7 @@ namespace HDARead {
         // tag1 timestamp, tag1 value, tag2 timestamp, tag2 value, ...
         static void OutputTable(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
 
-            string hdr = ",{0} timestamp, {0} value";
+            string hdr = "Timestamp, {0}";
             string valstr = "{0},{1}";
             string emptystr = ",";
 
@@ -314,18 +314,23 @@ namespace HDARead {
                 emptystr += ",";
             }
             // header
-            for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
+            sw.Write(hdr, OPCHDAItemValues[0].ItemName);
+            for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
+                sw.Write(",");
                 sw.Write(hdr, OPCHDAItemValues[i].ItemName);
             }
             sw.WriteLine();
 
             // What if different tags have different number of points?!
+            int max_rows = OPCHDAItemValues.Max(x => x.Count);
+            /*
             int max_rows = OPCHDAItemValues[0].Count;
             for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                if (max_rows < OPCHDAItemValues[0].Count) {
-                    max_rows = OPCHDAItemValues[0].Count;
+                if (max_rows < OPCHDAItemValues[i].Count) {
+                    max_rows = OPCHDAItemValues[i].Count;
                 }
             }
+            */
 
             // body
             for (int j = 0; j < max_rows; j++) {
@@ -352,7 +357,7 @@ namespace HDARead {
         static void OutputMerged(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             // header
             sw.Write("Timestamp");
-            string hdr = ", {0} value";
+            string hdr = ", {0}";
             if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
                 hdr += ", {0} da quality";
             }
