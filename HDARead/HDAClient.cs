@@ -14,6 +14,7 @@ namespace HDARead {
     class HDAClient {
 
         private Opc.Hda.Server _OPCServer = null;
+        public Opc.Hda.ServerStatus Status = null;
         private TraceSource _trace; 
 
         public enum OPCHDA_AGGREGATE {
@@ -67,29 +68,46 @@ namespace HDARead {
 
             try {
                 var fact = new OpcCom.Factory();
-                if (_OPCServer == null) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "_OPCServer Is Nothing, creating new object, trying to connect");
-                    _OPCServer = new Opc.Hda.Server(fact, null);
-                    _OPCServer.Connect(url, new Opc.ConnectData(new System.Net.NetworkCredential(), null));
-                    if (_OPCServer.IsConnected) {
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
-                    }
-                }
-                //If connection was lost
-                if (!_OPCServer.IsConnected) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server is disconnected, trying to connect");
+                if ((_OPCServer != null) && (!_OPCServer.IsConnected)) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "_OPCServer is disconnected, disposing object");
                     //Unfortunately, in case of lost connection simply calling .Connect() doesn't work :(
                     //Let's try to recreate the object from scratch
                     _OPCServer.Dispose();
+                    _OPCServer = null;
+                }
+
+                if (_OPCServer == null) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "_OPCServer is null, creating new object");
                     _OPCServer = new Opc.Hda.Server(fact, null);
+                } 
+
+                if (!_OPCServer.IsConnected) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server is disconnected, trying to connect");
                     _OPCServer.Connect(url, new Opc.ConnectData(new System.Net.NetworkCredential(), null));
-                    if (_OPCServer.IsConnected) {
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
-                    } else {
+                    if (!_OPCServer.IsConnected) {
                         _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed without exception: {0}", url.ToString());
                         return false;
                     }
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
                 }
+
+                Status = _OPCServer.GetStatus();
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server status:\n"+
+                    "\tCurrentTime:     {0}\n"+
+                    "\tMaxReturnValues: {1}\n" +
+                    "\tProductVersion:  {2}\n" +
+                    "\tServerState:     {3}\n" +
+                    "\tStartTime:       {4}\n" +
+                    "\tStatusInfo:      {5}\n" +
+                    "\tVendorInfo:      {6}\n", 
+                    Status.CurrentTime,
+                    Status.MaxReturnValues,
+                    Status.ProductVersion,
+                    Status.ServerState,
+                    Status.StartTime,
+                    Status.StatusInfo,
+                    Status.VendorInfo);
+
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed: {0}, {1}", url.ToString(), e.Message);
                 return false;
@@ -108,7 +126,13 @@ namespace HDARead {
                               bool IncludeBounds,
                               bool read_raw,
                               out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            
+
+            if ((Tagnames == null) || (Tagnames.Count() == 0)) {
+                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.ReadTrend: no tagnames to read");
+                OPCHDAItemValues = null;
+                return false;
+            }
+
             var OPCTrend = new Opc.Hda.Trend(_OPCServer);
             OPCTrend.IncludeBounds = IncludeBounds;
             //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
@@ -214,12 +238,19 @@ namespace HDARead {
                          bool IncludeBounds,
                          bool read_raw,
                          out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            
+
+            if ((Tagnames == null) || (Tagnames.Count() == 0)) {
+                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.Read: no tagnames to read");
+                OPCHDAItemValues = null;
+                return false;
+            }
+
             var ItemIds = new Opc.ItemIdentifier[Tagnames.Count()];
             for (int i = 0; i < Tagnames.Count(); i++) {
                 ItemIds[i] = new Opc.ItemIdentifier(Tagnames[i]);
             }
             // When using Server.ReadProcessed instead of Trend.ReadProcessed, we have to manually Server.CreateItems before.
+            // We also have to call ReleaseItems after use
             var ItemIDResults = _OPCServer.CreateItems(ItemIds);
             for (int i = 0; i < Tagnames.Count(); i++) {
                 if (!ItemIDResults[i].ResultID.Succeeded()) {
@@ -271,9 +302,11 @@ namespace HDARead {
                     OPCHDAItemValues = _OPCServer.ReadProcessed(hdaStartTime, hdaEndTime, ResampleInterval, Items);
                 }
 
-                if (OPCHDAItemValues != null) 
+                if (OPCHDAItemValues != null) {
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of tags = OPCHDAItemValues.Count()={0}", OPCHDAItemValues.Count());
-
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of values for the first tag = OPCHDAItemValues[0].Count={0}",
+                        OPCHDAItemValues[0].Count);
+                }
                 return true;
             } catch (Opc.ResultIDException e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
@@ -297,6 +330,14 @@ namespace HDARead {
                                           "'" + de.Key.ToString() + "'", de.Value);
                 }
                 return false;
+            } finally {
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "Releasing items.");
+                _OPCServer.ReleaseItems(ItemIds);
+                for (int i = 0; i < Tagnames.Count(); i++) {
+                    if (!ItemIDResults[i].ResultID.Succeeded()) {
+                        _trace.TraceEvent(TraceEventType.Error, 0, "Tag {0} couldn't be released! Result_ID={1}", Tagnames[i], ItemIDResults[i].ResultID.ToString());
+                    }
+                }
             }
         }
 

@@ -87,7 +87,9 @@ namespace HDARead {
             try {
                 bool res = false;
                 if (srv.Connect(Host, Server)) {
+                    // Remove unknown items from the list
                     srv.Validate(Tagnames);
+                    // Read items using the Hda.Server class.
                     res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
                     //res = srv.ReadTrend(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
                 } else {
@@ -316,7 +318,7 @@ namespace HDARead {
             // header
             sw.Write(hdr, OPCHDAItemValues[0].ItemName);
             for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                sw.Write(",");
+                sw.Write(", ");
                 sw.Write(hdr, OPCHDAItemValues[i].ItemName);
             }
             sw.WriteLine();
@@ -336,7 +338,7 @@ namespace HDARead {
             for (int j = 0; j < max_rows; j++) {
                 for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
                     if (i > 0) {
-                        sw.Write(",");
+                        sw.Write(", ");
                     }
                     if (j < OPCHDAItemValues[i].Count) {
                         sw.Write(valstr, 
@@ -374,23 +376,23 @@ namespace HDARead {
                 for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
                     // Maybe its better to catch exception (null ref) than to check every element
                     if (OPCHDAItemValues[i][j].Value == null) {
-                        sw.Write(",");
+                        sw.Write(", ");
                     } else {
-                        sw.Write(",{0}", OPCHDAItemValues[i][j].Value.ToString());
+                        sw.Write(", {0}", OPCHDAItemValues[i][j].Value.ToString());
                     }
 
                     if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
                         if (OPCHDAItemValues[i][j].Quality == null) {
-                            sw.Write(",");
+                            sw.Write(", ");
                         } else {
-                            sw.Write(",{0}", OPCHDAItemValues[i][j].Quality.ToString());
+                            sw.Write(", {0}", OPCHDAItemValues[i][j].Quality.ToString());
                         }
                     }
 
                     if ((OutputQuality == eOutputQuality.HISTORIAN) || (OutputQuality == eOutputQuality.BOTH)) {
                         // OPC.DA.Quality is struct, but OPC.HDA.Quality is enum.
                         // Enum cannot be null, so there is no need to check
-                        sw.Write(",{0}", OPCHDAItemValues[i][j].HistorianQuality.ToString());
+                        sw.Write(", {0}", OPCHDAItemValues[i][j].HistorianQuality.ToString());
                     }
                 }
                 sw.WriteLine();
