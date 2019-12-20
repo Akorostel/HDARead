@@ -47,7 +47,7 @@ HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -r
 - INTERPOLATIVE = 1,
 - NOAGGREGATE = 0
 
-## Output formata: LIST, TABLE, MERGED
+## Output formats: LIST, TABLE, MERGED
 
 ## Arguments
 

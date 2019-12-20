@@ -15,6 +15,7 @@ namespace HDARead {
 
         private Opc.Hda.Server _OPCServer = null;
         public Opc.Hda.ServerStatus Status = null;
+        public Opc.Hda.Aggregate[] SupportedAggregates = null;
         private TraceSource _trace; 
 
         public enum OPCHDA_AGGREGATE {
@@ -108,6 +109,13 @@ namespace HDARead {
                     Status.StatusInfo,
                     Status.VendorInfo);
 
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "SupportedAggregates:");
+                SupportedAggregates = _OPCServer.GetAggregates();
+                foreach (Opc.Hda.Aggregate agg in SupportedAggregates) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "{0}\t{1}\t{2}", agg.ID, agg.Name, agg.Description);
+                }
+
+
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed: {0}, {1}", url.ToString(), e.Message);
                 return false;
@@ -133,32 +141,19 @@ namespace HDARead {
                 return false;
             }
 
+            if (!read_raw && !(SupportedAggregates.Any(a => a.ID == AggregateID))) {
+                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.ReadTrend: this aggregate is not supported");
+                OPCHDAItemValues = null;
+                return false;
+            }
+
             var OPCTrend = new Opc.Hda.Trend(_OPCServer);
             OPCTrend.IncludeBounds = IncludeBounds;
-            //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
-            //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
-            //exception will be fired only when ReadProcessed is called.
-            try {
-                DateTime dtStartDateTime;
-                //Try to parse date and time. If it is in relative time format (for example NOW-30D),
-                //exception will be generated
-                dtStartDateTime = DateTime.Parse(strStartTime);
-                //No exception => date and time in absolute format, pass them to Opc.Hda.Time constructor as DateTime
-                OPCTrend.StartTime = new Opc.Hda.Time(dtStartDateTime);
-            } catch (FormatException) {
-                //Exception fired => Date and time in relative format.
-                //Pass them to Opc.Hda.Time constructor as strings
-                OPCTrend.StartTime = new Opc.Hda.Time(strStartTime);
-            }
-            try {
-                DateTime dtEndDateTime;
-                dtEndDateTime = DateTime.Parse(strEndTime);
-                OPCTrend.EndTime = new Opc.Hda.Time(dtEndDateTime);
-            } catch (FormatException) {
-                OPCTrend.EndTime = new Opc.Hda.Time(strEndTime);
-            }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "From timestamp {0} was recognized as {1}, IsRelative: {2}", strStartTime, OPCTrend.StartTime.ToString(), OPCTrend.StartTime.IsRelative);
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "To   timestamp {0} was recognized as {1}, IsRelative: {2}", strEndTime, OPCTrend.EndTime.ToString(), OPCTrend.EndTime.IsRelative);
+
+            DateTime dtStartTime, dtEndTime;
+            Opc.Hda.Time hdaStartTime, hdaEndTime;
+            ConvertStrDatetimeToHDADatetime(strStartTime, out dtStartTime, out hdaStartTime);
+            ConvertStrDatetimeToHDADatetime(strEndTime, out dtEndTime, out hdaEndTime);
 
             OPCTrend.MaxValues = MaxValues;
             OPCTrend.ResampleInterval = ResampleInterval; // 0 - return just one value (see OPC HDA spec.)
@@ -245,6 +240,12 @@ namespace HDARead {
                 return false;
             }
 
+            if (!read_raw && !(SupportedAggregates.Any(a => a.ID == AggregateID))) {
+                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.Read: this aggregate is not supported");
+                OPCHDAItemValues = null;
+                return false;
+            }
+
             var ItemIds = new Opc.ItemIdentifier[Tagnames.Count()];
             for (int i = 0; i < Tagnames.Count(); i++) {
                 ItemIds[i] = new Opc.ItemIdentifier(Tagnames[i]);
@@ -258,48 +259,63 @@ namespace HDARead {
                 }
             }
 
+            DateTime dtStartTime, dtEndTime;
             Opc.Hda.Time hdaStartTime, hdaEndTime;
-            //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
-            //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
-            //exception will be fired only when ReadProcessed is called.
-            try {
-                DateTime dtStartDateTime;
-                //Try to parse date and time. If it is in relative time format (for example NOW-30D),
-                //exception will be generated
-                dtStartDateTime = DateTime.Parse(strStartTime);
-                //No exception => date and time in absolute format, pass them to Opc.Hda.Time constructor as DateTime
-                hdaStartTime = new Opc.Hda.Time(dtStartDateTime);
-            } catch (FormatException) {
-                //Exception fired => Date and time in relative format.
-                //Pass them to Opc.Hda.Time constructor as strings
-                hdaStartTime = new Opc.Hda.Time(strStartTime);
-            }
-            try {
-                DateTime dtEndDateTime;
-                dtEndDateTime = DateTime.Parse(strEndTime);
-                hdaEndTime = new Opc.Hda.Time(dtEndDateTime);
-            } catch (FormatException) {
-                hdaEndTime = new Opc.Hda.Time(strEndTime);
-            }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "From timestamp {0} was recognized as {1}, IsRelative: {2}", 
-                strStartTime, hdaStartTime.ToString(), hdaStartTime.IsRelative);
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "To   timestamp {0} was recognized as {1}, IsRelative: {2}", 
-                strEndTime, hdaEndTime.ToString(), hdaEndTime.IsRelative);
+            ConvertStrDatetimeToHDADatetime(strStartTime, out dtStartTime, out hdaStartTime);
+            ConvertStrDatetimeToHDADatetime(strEndTime, out dtEndTime, out hdaEndTime);
 
-         
+            // Specified dtStartTime may be > than dtEndTime, this means that data should be returned in reverse order (see spec)
+            int order = 1;
+            if (dtStartTime > dtEndTime)
+                order = -1;
+
             // OPCTrend.MaxValues = MaxValues; // _OPCServer has no such property, it is passed as parameter to ReadRaw
+            if (MaxValues > Status.MaxReturnValues)
+                MaxValues = Status.MaxReturnValues;
+            
             OPCHDAItemValues = null;
 
             try {
-                if (read_raw)
+                if (read_raw) {
                     OPCHDAItemValues = _OPCServer.ReadRaw(hdaStartTime, hdaEndTime, MaxValues, IncludeBounds, ItemIDResults);
-                else {
+                } else {
                     var Items = new Opc.Hda.Item[Tagnames.Count()];
                     for (int i = 0; i < Tagnames.Count(); i++) {
                         Items[i] = new Opc.Hda.Item(ItemIDResults[i]);
                         Items[i].AggregateID = AggregateID;
                     }
-                    OPCHDAItemValues = _OPCServer.ReadProcessed(hdaStartTime, hdaEndTime, ResampleInterval, Items);
+
+                    Opc.Hda.ItemValueCollection[] tmpOPCHDAItemValues;
+
+                    // Server returns data including start datetime, excluding last datetime: [dtStartPortion, dtEndPortion)
+                    DateTime dtStartPortion = dtStartTime;
+                    DateTime dtEndPortion;
+
+                    while (order * ((dtEndTime - dtStartPortion).TotalSeconds) > 0) {
+                        // is 32-bit int enough for Seconds?
+                        int numvalues =  (int)  Math.Abs((dtEndTime - dtStartPortion).TotalSeconds / ResampleInterval);
+                        if (numvalues > MaxValues) {
+                            dtEndPortion = dtStartPortion.AddSeconds(ResampleInterval * MaxValues * order);
+                            numvalues = MaxValues;
+                        } else
+                            dtEndPortion = dtEndTime;
+
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Reading {0} values from {1} to {2}",
+                            numvalues, dtStartPortion.ToString(), dtEndPortion.ToString());
+
+                        tmpOPCHDAItemValues = _OPCServer.ReadProcessed(new Opc.Hda.Time(dtStartPortion),
+                            new Opc.Hda.Time(dtEndPortion), ResampleInterval, Items);
+
+                        if (dtStartPortion.Equals(dtStartTime)) {
+                            OPCHDAItemValues = tmpOPCHDAItemValues;
+                            //for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
+                            //    OPCHDAItemValues[i] = (Opc.Hda.ItemValueCollection)tmpOPCHDAItemValues[i].Clone();
+                        } else {
+                            for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
+                                OPCHDAItemValues[i].AddRange(tmpOPCHDAItemValues[i]);
+                        }
+                        dtStartPortion = dtEndPortion;
+                    }
                 }
 
                 if (OPCHDAItemValues != null) {
@@ -352,6 +368,29 @@ namespace HDARead {
                 }
                 _OPCServer.Dispose();
             }
+        }
+
+        private void ConvertStrDatetimeToHDADatetime(string strDateTime, out DateTime dtDateTime, out Opc.Hda.Time hdaDateTime) {
+            //Constructor Opc.Hda.Time(String) produces relative time, constructor Opc.Hda.Time(DateTime) produces absolute time. 
+            //Constructor Opc.Hda.Time(String) doesn't parse the string. In case if time string is wrong, 
+            //exception will be fired only when ReadProcessed is called.
+            try {
+                //Try to parse date and time. If it is in relative time format (for example NOW-30D),
+                //exception will be generated
+                dtDateTime = DateTime.Parse(strDateTime);
+                //No exception => date and time in absolute format, pass them to Opc.Hda.Time constructor as DateTime
+                hdaDateTime = new Opc.Hda.Time(dtDateTime);
+            } catch (FormatException) {
+                //Exception fired => Date and time in relative format.
+                //Pass them to Opc.Hda.Time constructor as strings
+                hdaDateTime = new Opc.Hda.Time(strDateTime);
+                dtDateTime = hdaDateTime.ResolveTime();
+            }
+
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "Timestamp {0} was recognized as {1}, IsRelative: {2}",
+                strDateTime, hdaDateTime.ToString(), hdaDateTime.IsRelative);
+
+            return;
         }
     }
 }

@@ -21,19 +21,21 @@ using System.IO;
  * exceptions
  * +read raw
  * +input file with tag list
- * why we use OPCTrend and not OPCServer read method
- * maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
- *    or maybe validate tags before read and delete them from query?
+ * + why we use OPCTrend and not OPCServer read method
+ * + maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
+ * +   or maybe validate tags before read and delete them from query?
  * +command line parameter to display output quality or not
  * +command line parameter to 'merged' output format (single timestamp column for all tags)
- * OutputTable: What if different tags have different number of points?!
+ * + OutputTable: What if different tags have different number of points?!
  * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
  * better merge algorithm?
- * header is shifted by one column in TABLE mode
+ * + header is shifted by one column in TABLE mode
  * + option to toggle debug output
- * check if 'MaxValues' work. If not - delete it.
+ * + check if 'MaxValues' work. If not - delete it.
  * trying to get data for the whole month - E_MAXEXCEEDED
  * if output file already exists: overwrite or do nothing
+ * omit value if NODATA quality
+ * shutdown event
  */
 
 namespace HDARead {
@@ -56,9 +58,9 @@ namespace HDARead {
         static string EndTime = "NOW";
         static int Aggregate = (int)HDAClient.OPCHDA_AGGREGATE.AVERAGE;
         static string OutputTimestampFormat = null;
-        static int MaxValues = 10;
+        static int MaxValues = 10; //!!!
         static int ResampleInterval = 0;
-        static bool IncludeBounds = true; // 
+        static bool IncludeBounds = false; // 
         static string OutputFileName = null;
         static string InputFileName = null;
         static bool ReadRaw = false;
@@ -179,7 +181,6 @@ namespace HDARead {
             }
 
             if (Verbose) {
-
                 _trace.Switch.Level = SourceLevels.All;
             } else {
                 _trace.Switch.Level = SourceLevels.Information;
@@ -215,8 +216,10 @@ namespace HDARead {
             Console.WriteLine("HDARead is going to:");
             Console.WriteLine("\t connect to OPC HDA server named '{0}' on computer '{1}'", Server, Host);
             Console.WriteLine("\t and read {0} data for the period from '{1}' to '{2}'", ReadRaw ? "raw" : "processed", StartTime, EndTime);
-            if (!ReadRaw)
-                Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval, EndTime);
+            if (!ReadRaw) {
+                Console.WriteLine("\t aggregating as {0}", ((HDAClient.OPCHDA_AGGREGATE)Aggregate).ToString());
+                Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval);
+            }
             Console.WriteLine("\t for the following tags:");
             foreach (string t in Tagnames) {
                 Console.WriteLine("\t\t" + t);
@@ -241,7 +244,10 @@ namespace HDARead {
                         OutputList(writer, OPCHDAItemValues);
                         break;
                     case eOutputFormat.MERGED:
-                        OutputMerged(writer, Merge(OPCHDAItemValues));
+                        if (ReadRaw)
+                            OutputMerged(writer, Merge(OPCHDAItemValues));
+                        else
+                            OutputMerged(writer, OPCHDAItemValues);
                         break;
                     case eOutputFormat.TABLE:
                         OutputTable(writer, OPCHDAItemValues);
@@ -400,7 +406,7 @@ namespace HDARead {
         }
 
         // Merge multiple timeseries. Fill with NaN.
-        static  Opc.Hda.ItemValueCollection[] Merge(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
+        static Opc.Hda.ItemValueCollection[] Merge(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             int n_tags = OPCHDAItemValues.Count();
             _trace.TraceEvent(TraceEventType.Verbose, 0, "Starting merge. n_tags = {0}", n_tags);
             var MergedValues = new Opc.Hda.ItemValueCollection[n_tags];
@@ -414,6 +420,10 @@ namespace HDARead {
                 row[i] = 0;
             }
 
+            bool ascending = true;
+            if (OPCHDAItemValues[0].EndTime < OPCHDAItemValues[0].StartTime)
+                ascending = false;
+       
             bool have_more_data = true;
             while (have_more_data) {
 
@@ -423,27 +433,20 @@ namespace HDARead {
                 }
                 _trace.TraceEvent(TraceEventType.Verbose, 0, msg);
 
-                // find min timestamp
-                int min_ts_col = -1;
-                DateTime min_ts = System.DateTime.MaxValue;
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for min timestamp");
+                // find minimum timestamp among first values of each tag (for ascending timeseries)
+                // find maximum timestamp among first values of each tag (for descending timeseries)
+                int ext_ts_col = -1;
+                DateTime ext_ts = System.DateTime.MaxValue;
 
-                for (int i = 0; i < n_tags; i++) {
-                    if (row[i] >= OPCHDAItemValues[i].Count) {
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: no data", OPCHDAItemValues[i].ItemName);
-                    } else {
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: {1}", OPCHDAItemValues[i].ItemName, OPCHDAItemValues[i][row[i]].Timestamp);
-                        if (min_ts > OPCHDAItemValues[i][row[i]].Timestamp) {
-                            min_ts = OPCHDAItemValues[i][row[i]].Timestamp;
-                            min_ts_col = i;
-                        }
-                    }
-                }
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "Min timestamp = {0}, index = {1}", min_ts, min_ts_col);
+                if (ascending)
+                    MinTimestamp(n_tags, row, OPCHDAItemValues, out ext_ts, out ext_ts_col);
+                else
+                    MaxTimestamp(n_tags, row, OPCHDAItemValues, out ext_ts, out ext_ts_col);
+
                 have_more_data = false;
                 // copy value with this timestamp to output array
                 for (int i = 0; i < n_tags; i++) {
-                    if ((row[i] < OPCHDAItemValues[i].Count) && (OPCHDAItemValues[i][row[i]].Timestamp.Equals(min_ts))) {
+                    if ((row[i] < OPCHDAItemValues[i].Count) && (OPCHDAItemValues[i][row[i]].Timestamp.Equals(ext_ts))) {
                         MergedValues[i].Add(OPCHDAItemValues[i][row[i]]);
                         _trace.TraceEvent(TraceEventType.Verbose, 0, "Copying: {0}, {1}, {2}",
                             OPCHDAItemValues[i].ItemName,
@@ -456,7 +459,7 @@ namespace HDARead {
                     } else {
                         // if there is no value for this timestamp, fill blank
                         var itemvalue = new Opc.Hda.ItemValue();
-                        itemvalue.Timestamp = min_ts;
+                        itemvalue.Timestamp = ext_ts;
                         itemvalue.Value = null;
                         var q = new Opc.Da.Quality();
                         q.QualityBits = Opc.Da.qualityBits.uncertain;
@@ -473,6 +476,47 @@ namespace HDARead {
             return MergedValues;
         }
 
+        static void MinTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
+            out DateTime ext_ts, out int ext_ts_col) {
+
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for min timestamp");
+            ext_ts_col = -1;
+            ext_ts = System.DateTime.MaxValue;
+            for (int i = 0; i < n_tags; i++) {
+                if (row[i] >= OPCHDAItemValues[i].Count) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: no data", OPCHDAItemValues[i].ItemName);
+                } else {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: {1}", OPCHDAItemValues[i].ItemName, OPCHDAItemValues[i][row[i]].Timestamp);
+                    if (ext_ts > OPCHDAItemValues[i][row[i]].Timestamp) {
+                        ext_ts = OPCHDAItemValues[i][row[i]].Timestamp;
+                        ext_ts_col = i;
+                    }
+                }
+            }
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "Min timestamp = {0}, index = {1}", ext_ts, ext_ts_col);
+        
+        }
+
+        static void MaxTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
+            out DateTime ext_ts, out int ext_ts_col) {
+
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for max timestamp");
+            ext_ts_col = -1;
+            ext_ts = System.DateTime.MinValue;
+            for (int i = 0; i < n_tags; i++) {
+                if (row[i] >= OPCHDAItemValues[i].Count) {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: no data", OPCHDAItemValues[i].ItemName);
+                } else {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: {1}", OPCHDAItemValues[i].ItemName, OPCHDAItemValues[i][row[i]].Timestamp);
+                    if (ext_ts < OPCHDAItemValues[i][row[i]].Timestamp) {
+                        ext_ts = OPCHDAItemValues[i][row[i]].Timestamp;
+                        ext_ts_col = i;
+                    }
+                }
+            }
+            _trace.TraceEvent(TraceEventType.Verbose, 0, "Max timestamp = {0}, index = {1}", ext_ts, ext_ts_col);
+
+        }
 
         static void ShowHelp() {
             Console.WriteLine("Usage: HDARead OPTIONS tag1 tag2 tag3");
