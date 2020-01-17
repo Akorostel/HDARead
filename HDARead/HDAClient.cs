@@ -124,81 +124,6 @@ namespace HDARead {
             return true;
         }
 
-        // This method uses Opc.Hda.Trend class to read data
-        public bool ReadTrend(string strStartTime,
-                              string strEndTime,
-                              string[] Tagnames,
-                              int AggregateID,
-                              int MaxValues,
-                              int ResampleInterval,
-                              bool IncludeBounds,
-                              bool read_raw,
-                              out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-
-            if ((Tagnames == null) || (Tagnames.Count() == 0)) {
-                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.ReadTrend: no tagnames to read");
-                OPCHDAItemValues = null;
-                return false;
-            }
-
-            if (!read_raw && !(SupportedAggregates.Any(a => a.ID == AggregateID))) {
-                _trace.TraceEvent(TraceEventType.Error, 0, "HDAClient.ReadTrend: this aggregate is not supported");
-                OPCHDAItemValues = null;
-                return false;
-            }
-
-            var OPCTrend = new Opc.Hda.Trend(_OPCServer);
-            OPCTrend.IncludeBounds = IncludeBounds;
-
-            DateTime dtStartTime, dtEndTime;
-            Opc.Hda.Time hdaStartTime, hdaEndTime;
-            ConvertStrDatetimeToHDADatetime(strStartTime, out dtStartTime, out hdaStartTime);
-            ConvertStrDatetimeToHDADatetime(strEndTime, out dtEndTime, out hdaEndTime);
-
-            OPCTrend.MaxValues = MaxValues;
-            OPCTrend.ResampleInterval = ResampleInterval; // 0 - return just one value (see OPC HDA spec.)
-            OPCTrend.Items.Clear();
-            OPCHDAItemValues = null;
-            
-            try {
-                for (int i = 0; i < Tagnames.Count(); i++) {
-                    OPCTrend.AddItem(new Opc.ItemIdentifier(Tagnames[i]));
-                    OPCTrend.Items[i].AggregateID = AggregateID;
-                }
-                if (read_raw)
-                    OPCHDAItemValues = OPCTrend.ReadRaw();
-                else
-                    OPCHDAItemValues = OPCTrend.ReadProcessed();
-
-                if (OPCHDAItemValues != null)
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of tags = OPCHDAItemValues.Count()={0}", OPCHDAItemValues.Count());
-
-                return true;
-            } catch (Opc.ResultIDException e) {
-                _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
-
-                // anyway, let's try to examine data
-                if (OPCHDAItemValues == null) {
-                    _trace.TraceEvent(TraceEventType.Error, 0, "OPCHDAItemValues == null");
-                } else {
-                    foreach (Opc.Hda.ItemValueCollection item in OPCHDAItemValues) {
-                        _trace.TraceEvent(TraceEventType.Error, 0, "For tag {0}  the ResultID is {1}", item.ItemName, item.ResultID.ToString());
-                    }
-                }
-                return false;
-            } catch (Exception e) {
-                _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
-                _trace.TraceEvent(TraceEventType.Error, 0, e.GetType().ToString());
-                
-                if (e.Data.Count > 0) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "  Extra details:");
-                    foreach (System.Collections.DictionaryEntry de in e.Data)
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "    Key: {0,-20}      Value: {1}",
-                                          "'" + de.Key.ToString() + "'", de.Value);
-                }
-                return false;
-            }            
-        }
 
         // Checks (validates) given list of tags, and removes non-existent tags from the list
         // Error messages are written to console.
@@ -270,13 +195,15 @@ namespace HDARead {
                 order = -1;
 
             // OPCTrend.MaxValues = MaxValues; // _OPCServer has no such property, it is passed as parameter to ReadRaw
-            if (MaxValues > Status.MaxReturnValues)
-                MaxValues = Status.MaxReturnValues;
             
             OPCHDAItemValues = null;
 
             try {
                 if (read_raw) {
+                    if (MaxValues > Status.MaxReturnValues) {
+                        _trace.TraceEvent(TraceEventType.Warning, 0, "MaxValue was set to {0} (server cannot return more).", Status.MaxReturnValues);
+                        MaxValues = Status.MaxReturnValues;
+                    }
                     OPCHDAItemValues = _OPCServer.ReadRaw(hdaStartTime, hdaEndTime, MaxValues, IncludeBounds, ItemIDResults);
                 } else {
                     var Items = new Opc.Hda.Item[Tagnames.Count()];
@@ -294,9 +221,9 @@ namespace HDARead {
                     while (order * ((dtEndTime - dtStartPortion).TotalSeconds) > 0) {
                         // is 32-bit int enough for Seconds?
                         int numvalues =  (int)  Math.Abs((dtEndTime - dtStartPortion).TotalSeconds / ResampleInterval);
-                        if (numvalues > MaxValues) {
-                            dtEndPortion = dtStartPortion.AddSeconds(ResampleInterval * MaxValues * order);
-                            numvalues = MaxValues;
+                        if (numvalues > Status.MaxReturnValues) {
+                            dtEndPortion = dtStartPortion.AddSeconds(ResampleInterval * Status.MaxReturnValues * order);
+                            numvalues = Status.MaxReturnValues;
                         } else
                             dtEndPortion = dtEndTime;
 

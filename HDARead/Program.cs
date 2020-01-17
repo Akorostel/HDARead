@@ -18,7 +18,6 @@ using System.IO;
  * +aggregate enum
  * +resample interval
  * +file output
- * exceptions
  * +read raw
  * +input file with tag list
  * + why we use OPCTrend and not OPCServer read method
@@ -27,15 +26,19 @@ using System.IO;
  * +command line parameter to display output quality or not
  * +command line parameter to 'merged' output format (single timestamp column for all tags)
  * + OutputTable: What if different tags have different number of points?!
- * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
- * better merge algorithm?
  * + header is shifted by one column in TABLE mode
  * + option to toggle debug output
  * + check if 'MaxValues' work. If not - delete it.
- * trying to get data for the whole month - E_MAXEXCEEDED
+ * + trying to get data for the whole month - E_MAXEXCEEDED
+ * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
+ * better merge algorithm?
+ * exceptions
  * if output file already exists: overwrite or do nothing
  * omit value if NODATA quality
  * shutdown event
+ * log to file?
+ * partition the program to separate modules/classes...
+ * write to file portion by portion to conserve memory...
  */
 
 namespace HDARead {
@@ -58,7 +61,7 @@ namespace HDARead {
         static string EndTime = "NOW";
         static int Aggregate = (int)HDAClient.OPCHDA_AGGREGATE.AVERAGE;
         static string OutputTimestampFormat = null;
-        static int MaxValues = 10; //!!!
+        static int MaxValues = int.MaxValue; 
         static int ResampleInterval = 0;
         static bool IncludeBounds = false; // 
         static string OutputFileName = null;
@@ -218,14 +221,22 @@ namespace HDARead {
             Console.WriteLine("\t and read {0} data for the period from '{1}' to '{2}'", ReadRaw ? "raw" : "processed", StartTime, EndTime);
             if (!ReadRaw) {
                 Console.WriteLine("\t aggregating as {0}", ((HDAClient.OPCHDA_AGGREGATE)Aggregate).ToString());
-                Console.WriteLine("\t with resample interval {0} seconds", ResampleInterval);
+                Console.WriteLine("\t with resample interval {0} seconds.", ResampleInterval);
+            } else {
+                Console.WriteLine("\t No more than {0} values for each tag should be loaded.", MaxValues);
+                Console.WriteLine("\t Bounding item values will {0} be included in result.", IncludeBounds ? "" : "not");
             }
-            Console.WriteLine("\t for the following tags:");
+            if (!string.IsNullOrEmpty(OutputTimestampFormat)) 
+                Console.WriteLine("\t Output timestamp format is specified as {0}.", OutputTimestampFormat);
+            if (!string.IsNullOrEmpty(OutputFileName))
+                Console.WriteLine("\t The resulting data will be written to file {0}.", OutputFileName);
+            else
+                Console.WriteLine("\t The resulting data will be output to console.", OutputFileName);
+            Console.WriteLine("\t The list of requested tags:");
             foreach (string t in Tagnames) {
                 Console.WriteLine("\t\t" + t);
             }
-            if (ReadRaw)
-                Console.WriteLine("\t No more than {0} values for each tag should be loaded.", MaxValues);
+
         }
 
         static bool WriteOutput(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
