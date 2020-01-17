@@ -69,6 +69,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Merger.cs" />
+    <Compile Include="Utils.cs" />
+    <Compile Include="OutputWriter.cs" />
     <Compile Include="HDAClient.cs" />
     <Compile Include="Options.cs" />
     <Compile Include="Program.cs" />

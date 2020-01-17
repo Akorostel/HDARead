@@ -47,7 +47,8 @@ HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -r
 - INTERPOLATIVE = 1,
 - NOAGGREGATE = 0
 
-## Output formats: LIST, TABLE, MERGED
+## Output formats: TABLE, MERGED
+
 
 ## Arguments
 
@@ -84,7 +85,11 @@ Options:
    
    -m=VALUE, maxvalues=VALUE
    
-        Maximum number of values to load for each tag (only for ReadRaw data)
+        Maximum number of values to load for each tag (only for ReadRaw)
+   
+   -b, --bounds
+        
+        Whether the bounding item values should be returned (only for ReadRaw)
 
   -t=VALUE, --tsformat=VALUE
   
@@ -92,7 +97,7 @@ Options:
   
   -f=VALUE
   
-        Output format: LIST (default) or TABLE or MERGED
+        Output format: TABLE or MERGED (default)
         
   -q=VALUE
   

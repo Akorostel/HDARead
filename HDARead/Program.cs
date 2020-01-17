@@ -30,16 +30,16 @@ using System.IO;
  * + option to toggle debug output
  * + check if 'MaxValues' work. If not - delete it.
  * + trying to get data for the whole month - E_MAXEXCEEDED
- * remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
+ * + remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
+ * partition the program to separate modules/classes...
+ * write to file portion by portion to conserve memory...
+ * check and rewise exceptions vs. error codes
  * better merge algorithm?
- * exceptions
  * if output file already exists: overwrite or do nothing
  * omit value if NODATA quality
  * shutdown event
  * log to file?
- * partition the program to separate modules/classes...
- * write to file portion by portion to conserve memory...
- */
+ * * */
 
 namespace HDARead {
 
@@ -70,7 +70,7 @@ namespace HDARead {
         static bool Help = false;
         static bool Verbose = false;
         static eOutputQuality OutputQuality = eOutputQuality.NONE;
-        static eOutputFormat OutputFormat = eOutputFormat.LIST;
+        static eOutputFormat OutputFormat = eOutputFormat.MERGED;
         static List<string> Tagnames = new List<string>();
         static string OptionDescription = null;
 
@@ -120,8 +120,15 @@ namespace HDARead {
                 Console.ResetColor();
             }
 
-            WriteOutput(OPCHDAItemValues);
-           
+            try {
+                var out_writer = new OutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                out_writer.WriteHeader(OPCHDAItemValues);
+                out_writer.Write(OPCHDAItemValues);
+                out_writer.Close();
+            } catch (Exception e) {
+                Console.WriteLine(e.Message);
+                return;
+            }
             return;
         }
 
@@ -134,7 +141,7 @@ namespace HDARead {
                                                                                 v => StartTime = v ?? "NOW-1H"},
    	            { "to=|end=",               "End time (abs. or relative), default NOW",      
                                                                                 v => EndTime = v ?? "NOW"},
-   	            { "a=|agg=",                "Aggregate (see spec)",             v => Aggregate = GetHDAAggregate(v) },
+   	            { "a=|agg=",                "Aggregate (see spec)",             v => Aggregate = Utils.GetHDAAggregate(v) },
                 { "r=|resample=",           "Resample interval (in seconds), 0 - return just one value (see OPC HDA spec.)",  
                                                                                 v => ResampleInterval = Int32.Parse(v)},
                 { "raw",                    "Read raw data (if omitted, read processed data) ",  
@@ -144,10 +151,10 @@ namespace HDARead {
                 { "b|bounds",               "Whether the bounding item values should be returned (only for ReadRaw).",  
                                                                                 v => IncludeBounds = v != null},
                 { "t=|tsformat=",           "Output timestamp format to use",   v => OutputTimestampFormat = v},
-                { "f=",                     "Output format (LIST or TABLE or MERGED)",   
-                                                                                v => OutputFormat = GetOutputFormat(v)},
+                { "f=",                     "Output format (TABLE or MERGED)",   
+                                                                                v => OutputFormat = Utils.GetOutputFormat(v)},
                 { "q=",                     "Include quality in output data (NONE, DA, HISTORIAN or BOTH)",   
-                                                                                v => OutputQuality = GetOutputQuality(v)},
+                                                                                v => OutputQuality = Utils.GetOutputQuality(v)},
                 { "o=|output=",             "Output filename (if omitted, output to console)",   
                                                                                 v => OutputFileName = v},
                 { "i=|input=",              "Input filename with list of tags (if omitted, tag list must be provided as command line argument)",   
@@ -239,295 +246,6 @@ namespace HDARead {
 
         }
 
-        static bool WriteOutput(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            StreamWriter writer=null;
-            try {
-                if (!string.IsNullOrEmpty(OutputFileName)) {
-                    writer = new StreamWriter(OutputFileName);
-                } else {
-                    writer = new StreamWriter(Console.OpenStandardOutput());
-                    writer.AutoFlush = true;
-                    Console.SetOut(writer);
-                }
-
-                switch (OutputFormat) {
-                    case eOutputFormat.LIST:
-                        OutputList(writer, OPCHDAItemValues);
-                        break;
-                    case eOutputFormat.MERGED:
-                        if (ReadRaw)
-                            OutputMerged(writer, Merge(OPCHDAItemValues));
-                        else
-                            OutputMerged(writer, OPCHDAItemValues);
-                        break;
-                    case eOutputFormat.TABLE:
-                        OutputTable(writer, OPCHDAItemValues);
-                        break;
-                }
-
-                if (!string.IsNullOrEmpty(OutputFileName)) {
-                    Console.WriteLine("Data were written to file {0}.", OutputFileName);
-                }
-                return true;
-            } catch (Exception e) {
-                _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
-                return false;
-            } finally {
-                if (!string.IsNullOrEmpty(OutputFileName) && (writer!=null) ) {
-                    writer.Close();
-                }
-            }
-        }
-
-        // Output format: list
-        // tag1 timestamp, tag1 value
-        // ...
-        // tag2 timestamp, tag2 value
-        // ...
-        static void OutputList(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
-                sw.WriteLine();
-                sw.WriteLine("\tTag ({0} of {1}): {2} ({3} values):", i + 1, 
-                    OPCHDAItemValues.Count(), 
-                    OPCHDAItemValues[i].ItemName, 
-                    OPCHDAItemValues[i].Count);
-
-                // header
-                string valstr = "{0,20},{1,20}";
-                sw.WriteLine("{0,20}{1,20}", "Timestamp", "Value");
-                if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
-                    sw.WriteLine("{0,20}", "DA Quality");
-                    valstr += "{2,20}";
-                }
-                if ((OutputQuality == eOutputQuality.HISTORIAN) || (OutputQuality == eOutputQuality.BOTH)) {
-                    sw.WriteLine("{0,20}", "Historian Quality");
-                    valstr += "{3,20}";
-                }
-                // body
-                for (int j = 0; j < OPCHDAItemValues[i].Count; j++) {
-                    sw.WriteLine(valstr, 
-                        GetDatetimeStr(OPCHDAItemValues[i][j].Timestamp, OutputTimestampFormat), 
-                        OPCHDAItemValues[i][j].Value.ToString(), 
-                        OPCHDAItemValues[i][j].Quality.ToString(),
-                        OPCHDAItemValues[i][j].HistorianQuality.ToString());
-                }
-            }
-        }
-
-        // Output format: table
-        // tag1 timestamp, tag1 value, tag2 timestamp, tag2 value, ...
-        static void OutputTable(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-
-            string hdr = "Timestamp, {0}";
-            string valstr = "{0},{1}";
-            string emptystr = ",";
-
-            if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
-                hdr += ", {0} da quality";
-                valstr += ",{2}";
-                emptystr += ",";
-            }
-            if ((OutputQuality == eOutputQuality.HISTORIAN) || (OutputQuality == eOutputQuality.BOTH)) {
-                hdr += ", {0} hist quality";
-                valstr += ",{3}";
-                emptystr += ",";
-            }
-            // header
-            sw.Write(hdr, OPCHDAItemValues[0].ItemName);
-            for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                sw.Write(", ");
-                sw.Write(hdr, OPCHDAItemValues[i].ItemName);
-            }
-            sw.WriteLine();
-
-            // What if different tags have different number of points?!
-            int max_rows = OPCHDAItemValues.Max(x => x.Count);
-            /*
-            int max_rows = OPCHDAItemValues[0].Count;
-            for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                if (max_rows < OPCHDAItemValues[i].Count) {
-                    max_rows = OPCHDAItemValues[i].Count;
-                }
-            }
-            */
-
-            // body
-            for (int j = 0; j < max_rows; j++) {
-                for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
-                    if (i > 0) {
-                        sw.Write(", ");
-                    }
-                    if (j < OPCHDAItemValues[i].Count) {
-                        sw.Write(valstr, 
-                            GetDatetimeStr(OPCHDAItemValues[i][j].Timestamp, OutputTimestampFormat), 
-                            OPCHDAItemValues[i][j].Value.ToString(), 
-                            OPCHDAItemValues[i][j].Quality.ToString(), 
-                            OPCHDAItemValues[i][j].HistorianQuality.ToString());
-                    } else {
-                        sw.Write(emptystr);
-                    }
-                }
-                sw.WriteLine();
-            }
-        }
-
-        // Output format: merged
-        // timestamp, tag1 value, tag2 value, ...
-        static void OutputMerged(StreamWriter sw, Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            // header
-            sw.Write("Timestamp");
-            string hdr = ", {0}";
-            if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
-                hdr += ", {0} da quality";
-            }
-            if ((OutputQuality == eOutputQuality.HISTORIAN) || (OutputQuality == eOutputQuality.BOTH)) {
-                hdr += ", {0} hist quality";
-            }
-            // header
-            for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
-                sw.Write(hdr, OPCHDAItemValues[i].ItemName);
-            }
-            sw.WriteLine();
-            for (int j = 0; j < OPCHDAItemValues[0].Count; j++) {
-                sw.Write("{0}", GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, OutputTimestampFormat));
-                for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
-                    // Maybe its better to catch exception (null ref) than to check every element
-                    if (OPCHDAItemValues[i][j].Value == null) {
-                        sw.Write(", ");
-                    } else {
-                        sw.Write(", {0}", OPCHDAItemValues[i][j].Value.ToString());
-                    }
-
-                    if ((OutputQuality == eOutputQuality.DA) || (OutputQuality == eOutputQuality.BOTH)) {
-                        if (OPCHDAItemValues[i][j].Quality == null) {
-                            sw.Write(", ");
-                        } else {
-                            sw.Write(", {0}", OPCHDAItemValues[i][j].Quality.ToString());
-                        }
-                    }
-
-                    if ((OutputQuality == eOutputQuality.HISTORIAN) || (OutputQuality == eOutputQuality.BOTH)) {
-                        // OPC.DA.Quality is struct, but OPC.HDA.Quality is enum.
-                        // Enum cannot be null, so there is no need to check
-                        sw.Write(", {0}", OPCHDAItemValues[i][j].HistorianQuality.ToString());
-                    }
-                }
-                sw.WriteLine();
-            }
-        }
-
-        // Merge multiple timeseries. Fill with NaN.
-        static Opc.Hda.ItemValueCollection[] Merge(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            int n_tags = OPCHDAItemValues.Count();
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Starting merge. n_tags = {0}", n_tags);
-            var MergedValues = new Opc.Hda.ItemValueCollection[n_tags];
-            for (int i = 0; i < n_tags; i++) {
-                MergedValues[i] = new Opc.Hda.ItemValueCollection(new Opc.ItemIdentifier(OPCHDAItemValues[i]));
-            }
-
-            // init pointer (row numbers) for each column
-            int[] row = new int[n_tags];
-            for (int i = 0; i < n_tags; i++) {
-                row[i] = 0;
-            }
-
-            bool ascending = true;
-            if (OPCHDAItemValues[0].EndTime < OPCHDAItemValues[0].StartTime)
-                ascending = false;
-       
-            bool have_more_data = true;
-            while (have_more_data) {
-
-                string msg = "rows: ";
-                for (int i = 0; i < n_tags; i++) {
-                    msg += row[i] + ", ";
-                }
-                _trace.TraceEvent(TraceEventType.Verbose, 0, msg);
-
-                // find minimum timestamp among first values of each tag (for ascending timeseries)
-                // find maximum timestamp among first values of each tag (for descending timeseries)
-                int ext_ts_col = -1;
-                DateTime ext_ts = System.DateTime.MaxValue;
-
-                if (ascending)
-                    MinTimestamp(n_tags, row, OPCHDAItemValues, out ext_ts, out ext_ts_col);
-                else
-                    MaxTimestamp(n_tags, row, OPCHDAItemValues, out ext_ts, out ext_ts_col);
-
-                have_more_data = false;
-                // copy value with this timestamp to output array
-                for (int i = 0; i < n_tags; i++) {
-                    if ((row[i] < OPCHDAItemValues[i].Count) && (OPCHDAItemValues[i][row[i]].Timestamp.Equals(ext_ts))) {
-                        MergedValues[i].Add(OPCHDAItemValues[i][row[i]]);
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Copying: {0}, {1}, {2}",
-                            OPCHDAItemValues[i].ItemName,
-                            OPCHDAItemValues[i][row[i]].Timestamp.ToString(),
-                            OPCHDAItemValues[i][row[i]].Value.ToString());
-                        row[i]++;
-                        if (row[i] < OPCHDAItemValues[i].Count) {
-                            have_more_data = true;
-                        }
-                    } else {
-                        // if there is no value for this timestamp, fill blank
-                        var itemvalue = new Opc.Hda.ItemValue();
-                        itemvalue.Timestamp = ext_ts;
-                        itemvalue.Value = null;
-                        var q = new Opc.Da.Quality();
-                        q.QualityBits = Opc.Da.qualityBits.uncertain;
-                        itemvalue.Quality = q;
-                        itemvalue.HistorianQuality = Opc.Hda.Quality.NoData;
-                        MergedValues[i].Add(itemvalue);
-
-                        _trace.TraceEvent(TraceEventType.Verbose, 0, "Filling with blank: {0}, {1}",
-                            OPCHDAItemValues[i].ItemName,
-                            itemvalue.Timestamp.ToString());
-                    }
-                }
-            }
-            return MergedValues;
-        }
-
-        static void MinTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
-            out DateTime ext_ts, out int ext_ts_col) {
-
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for min timestamp");
-            ext_ts_col = -1;
-            ext_ts = System.DateTime.MaxValue;
-            for (int i = 0; i < n_tags; i++) {
-                if (row[i] >= OPCHDAItemValues[i].Count) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: no data", OPCHDAItemValues[i].ItemName);
-                } else {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: {1}", OPCHDAItemValues[i].ItemName, OPCHDAItemValues[i][row[i]].Timestamp);
-                    if (ext_ts > OPCHDAItemValues[i][row[i]].Timestamp) {
-                        ext_ts = OPCHDAItemValues[i][row[i]].Timestamp;
-                        ext_ts_col = i;
-                    }
-                }
-            }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Min timestamp = {0}, index = {1}", ext_ts, ext_ts_col);
-        
-        }
-
-        static void MaxTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
-            out DateTime ext_ts, out int ext_ts_col) {
-
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for max timestamp");
-            ext_ts_col = -1;
-            ext_ts = System.DateTime.MinValue;
-            for (int i = 0; i < n_tags; i++) {
-                if (row[i] >= OPCHDAItemValues[i].Count) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: no data", OPCHDAItemValues[i].ItemName);
-                } else {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Check tag {0}: {1}", OPCHDAItemValues[i].ItemName, OPCHDAItemValues[i][row[i]].Timestamp);
-                    if (ext_ts < OPCHDAItemValues[i][row[i]].Timestamp) {
-                        ext_ts = OPCHDAItemValues[i][row[i]].Timestamp;
-                        ext_ts_col = i;
-                    }
-                }
-            }
-            _trace.TraceEvent(TraceEventType.Verbose, 0, "Max timestamp = {0}, index = {1}", ext_ts, ext_ts_col);
-
-        }
 
         static void ShowHelp() {
             Console.WriteLine("Usage: HDARead OPTIONS tag1 tag2 tag3");
@@ -541,47 +259,6 @@ namespace HDARead {
                 Console.Write(" " + agg);
             }
                 
-        }
-
-        static int GetHDAAggregate(string str) {
-            HDAClient.OPCHDA_AGGREGATE Value;
-
-            if (Enum.TryParse(str, out Value) && Enum.IsDefined(typeof(HDAClient.OPCHDA_AGGREGATE), Value))
-                return (int)Value;
-            else
-                throw new NDesk.Options.OptionException("Wrong aggregate: " + str, "-a");
-        }
-
-        static eOutputFormat GetOutputFormat(string str) {
-            eOutputFormat Value;
-            if (string.IsNullOrEmpty(str))
-                return eOutputFormat.LIST;
-
-            if (Enum.TryParse(str, out Value) && Enum.IsDefined(typeof(eOutputFormat), Value))
-                return Value;
-            else
-                throw new NDesk.Options.OptionException("Wrong output format: " + str, "-f");
-        }
-
-        static eOutputQuality GetOutputQuality(string str) {
-            eOutputQuality Value;
-            if (string.IsNullOrEmpty(str))
-                return eOutputQuality.NONE;
-
-            if (Enum.TryParse(str, out Value) && Enum.IsDefined(typeof(eOutputQuality), Value))
-                return Value;
-            else
-                throw new NDesk.Options.OptionException("Wrong output quality: " + str, "-q");
-        }
-
-        static string GetDatetimeStr(DateTime dt, string fmt) {
-            string ts;
-            if (string.IsNullOrEmpty(fmt)) {
-                ts = dt.ToString();
-            } else {
-                ts = dt.ToString(fmt);
-            }
-            return ts;
         }
 
     }
