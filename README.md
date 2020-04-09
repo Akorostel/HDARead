@@ -6,14 +6,34 @@ HDARead is used to read the data from OPC HDA server and save it to text file.
 ## Examples
 
 HDARead.exe -s="OPC.PHDServerHDA.1" $TEST.TEST2.QQ.LOLIM
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=START -r=600 $TEST.TEST2.QQ.LOLIM
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.INPUT
+
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
+
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.txt"
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.csv"
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE -i=tags.txt -o="out.csv"
+
+
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -raw  -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM TEST.DATA.MI2
+
+
 
 ## Start and end time format
 

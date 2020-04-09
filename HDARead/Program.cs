@@ -10,7 +10,7 @@ using Opc;
 using OpcCom;
 
 using System.Diagnostics;
-using Microsoft.VisualBasic.Logging;
+//using Microsoft.VisualBasic.Logging;
 
 using System.IO;
 
@@ -43,12 +43,12 @@ using System.IO;
 
 namespace HDARead {
 
-    enum eOutputFormat {
+    public enum eOutputFormat {
         LIST = 1,
         TABLE = 2,
         MERGED = 3
     }
-    enum eOutputQuality {
+    public enum eOutputQuality {
         NONE = 0,
         DA = 1,
         HISTORIAN = 2,
@@ -96,7 +96,6 @@ namespace HDARead {
                     srv.Validate(Tagnames);
                     // Read items using the Hda.Server class.
                     res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
-                    //res = srv.ReadTrend(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
                 } else {
                     Console.WriteLine("HDARead unable to connect to OPC server.");
                 }
@@ -121,14 +120,25 @@ namespace HDARead {
             }
 
             try {
-                var out_writer = new OutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                OutputWriter out_writer;
+                switch (OutputFormat) {
+                    case eOutputFormat.MERGED:
+                        out_writer = new MergedOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                        break;
+                    case eOutputFormat.TABLE:
+                        out_writer = new TableOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                        break;
+                    default:
+                        throw(new ArgumentException("Unknown output format"));
+                }
+                
                 out_writer.WriteHeader(OPCHDAItemValues);
                 out_writer.Write(OPCHDAItemValues);
                 out_writer.Close();
             } catch (Exception e) {
                 Console.WriteLine(e.Message);
                 return;
-            }
+            } //finally close? or everything is already done inside out_writer?
             return;
         }
 
