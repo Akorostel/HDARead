@@ -50,5 +50,12 @@ namespace HDARead {
             }
             return ts;
         }
+
+        static public void ConsoleWriteColoredLine(ConsoleColor color, String value) {
+            var originalForegroundColor = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.WriteLine(value);
+            Console.ForegroundColor = originalForegroundColor;
+        }
     }
 }

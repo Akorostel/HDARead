@@ -194,8 +194,6 @@ namespace HDARead {
             if (dtStartTime > dtEndTime)
                 order = -1;
 
-            // OPCTrend.MaxValues = MaxValues; // _OPCServer has no such property, it is passed as parameter to ReadRaw
-            
             OPCHDAItemValues = null;
 
             try {
@@ -219,7 +217,7 @@ namespace HDARead {
                     DateTime dtEndPortion;
 
                     while (order * ((dtEndTime - dtStartPortion).TotalSeconds) > 0) {
-                        // is 32-bit int enough for Seconds?
+                        // is 32-bit int enough for Seconds? Yes, it's 68 years
                         int numvalues =  (int)  Math.Abs((dtEndTime - dtStartPortion).TotalSeconds / ResampleInterval);
                         if (numvalues > Status.MaxReturnValues) {
                             dtEndPortion = dtStartPortion.AddSeconds(ResampleInterval * Status.MaxReturnValues * order);
@@ -234,9 +232,8 @@ namespace HDARead {
                             new Opc.Hda.Time(dtEndPortion), ResampleInterval, Items);
 
                         if (dtStartPortion.Equals(dtStartTime)) {
+                            // if it was a first call
                             OPCHDAItemValues = tmpOPCHDAItemValues;
-                            //for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
-                            //    OPCHDAItemValues[i] = (Opc.Hda.ItemValueCollection)tmpOPCHDAItemValues[i].Clone();
                         } else {
                             for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
                                 OPCHDAItemValues[i].AddRange(tmpOPCHDAItemValues[i]);

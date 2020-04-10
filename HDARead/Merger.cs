@@ -8,17 +8,16 @@ using System.Diagnostics;
 using Microsoft.VisualBasic.Logging;
 
 namespace HDARead {
-    class Merger {
+    static class Merger {
         static TraceSource _trace = new TraceSource("MergerTraceSource");
 
-        public Merger(SourceLevels swlvl = SourceLevels.Information) {
-            _trace = new TraceSource("MergerTraceSource");
+        public static void SetDebugLevel(SourceLevels swlvl = SourceLevels.Information) {
             _trace.Switch.Level = swlvl;
             _trace.TraceEvent(TraceEventType.Verbose, 0, "Created Merger");
         }
 
         // Merge multiple timeseries. Fill with NaN.
-        public Opc.Hda.ItemValueCollection[] Merge(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
+        public static Opc.Hda.ItemValueCollection[] Merge(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             int n_tags = OPCHDAItemValues.Count();
             _trace.TraceEvent(TraceEventType.Verbose, 0, "Starting merge. n_tags = {0}", n_tags);
             var MergedValues = new Opc.Hda.ItemValueCollection[n_tags];
@@ -88,7 +87,7 @@ namespace HDARead {
             return MergedValues;
         }
 
-        void MinTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
+        static void MinTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
             out DateTime ext_ts, out int ext_ts_col) {
 
             _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for min timestamp");
@@ -109,7 +108,7 @@ namespace HDARead {
 
         }
 
-        void MaxTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
+        static void MaxTimestamp(int n_tags, int[] row, Opc.Hda.ItemValueCollection[] OPCHDAItemValues,
             out DateTime ext_ts, out int ext_ts_col) {
 
             _trace.TraceEvent(TraceEventType.Verbose, 0, "Looking for max timestamp");

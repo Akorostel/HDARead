@@ -108,8 +108,8 @@ namespace HDARead {
         public override void Write(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             try {
                 if (_ReadRaw) {
-                    var MyMerger = new Merger(_trace.Switch.Level);
-                    OPCHDAItemValues = MyMerger.Merge(OPCHDAItemValues);
+                    Merger.SetDebugLevel(_trace.Switch.Level);
+                    OPCHDAItemValues = Merger.Merge(OPCHDAItemValues);
                 }
 
                 for (int j = 0; j < OPCHDAItemValues[0].Count; j++) {
@@ -258,25 +258,3 @@ namespace HDARead {
         }
     }
 }
- /*
-  * public void WriteHeader(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
-            try {
-                switch (_OutputFormat) {
-                    case eOutputFormat.MERGED:
-                        OutputMergedHeader(OPCHDAItemValues);
-                        break;
-                    case eOutputFormat.TABLE:
-                        OutputTableHeader(OPCHDAItemValues);
-                        break;
-                }
-                return;
-
-            } catch (Exception e) {
-                _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output header:" + e.ToString());
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
-                throw;
-            } 
-        }
-    */

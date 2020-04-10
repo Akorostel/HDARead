@@ -1,45 +1,45 @@
-# HDARead
+HDARead
+=======
+
 Command line OPC HDA client (.NET)
 
 HDARead is used to read the data from OPC HDA server and save it to text file.
 
-## Examples
+Examples
+--------
 
-HDARead.exe -s="OPC.PHDServerHDA.1" $TEST.TEST2.QQ.LOLIM
-
+~~~~
+HDARead.exe -s=PHDServerHDA.1" $TEST.TEST2.QQ.LOLIM
 
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=START -r=600 $TEST.TEST2.QQ.LOLIM
 
-
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.INPUT
-
-
 
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
 
-
-
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
-
 
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.txt"
 
-
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.csv"
-
 
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE -i=tags.txt -o="out.csv"
 
-
 HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -raw  -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM TEST.DATA.MI2
+~~~~
 
+Start and end time format
+-------------------------
 
+Start and end timestamps may be specified as either absolute or relative. Absolute timestamps are parsed by .NET System.DateTime.Parse function. See [description](https://docs.microsoft.com/en-us/dotnet/api/system.datetime.parse). Relative timestamps are in the form `keyword+/-offset+/-offset…`, i.e. `NOW-1D+7H30M`. For details see OPCHDA_TIME description in OPC HDA specs.
 
-## Start and end time format
+Modes: ReadRaw and ReadProcessed
+--------------------------------
 
-## Modes: ReadRaw and ReadProcessed
+Data can be queried from server by either ReadRaw or ReadProcessed functions. Basically, ReadRaw reads data as they are stored on server, while ReadProcessed divide the `[StartTime, EndTime)` range to intervals of the length `ResampleInterval` and applies selected aggregate function to every time interval. This processing is done by OPC HDA server. For details see OPC HDA specs.
 
-## Aggregates
+Aggregates
+----------
 
 - ANNOTATIONS = 24,
 - WORSTQUALITY = 23,
@@ -67,16 +67,32 @@ HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -r
 - INTERPOLATIVE = 1,
 - NOAGGREGATE = 0
 
-## Output formats: TABLE, MERGED
+Output formats: TABLE, MERGED
+-----------------------------
 
+HDAread can show queried data on console (if no `-o`key specified) or save them to text file (CSV - comma separated value). 
 
-## Arguments
+There are two output formats supported: TABLE and MERGED.  
+TABLE formatting looks like the following:  
+`Tag1Timestamp, Tag1Value, Tag2Timestamp, Tag2Value, Tag3Timestamp, Tag3Value...`
+
+MERGE formatting looks like the following:  
+`Timestamp, Tag1Value, Tag2Value, Tag3Value...`
+
+When querying *raw* data from server, server returns individual set of timestamps for each tag, so additional processing is done by HDAread to align different tags to single timeline for MERGED output. 
+
+There is also an option `-q` to include in the output the quality for each tag.
+
+Output timestamp format ("yyyy-MM-dd hh:mm:ss", "MM/dd/yy hh:mm", etc.) can be specified by using `-t` key. For details on format strings see [1](https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings), [2](https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings)
+ 
+Arguments
+---------
 
 Usage: HDARead [OPTIONS]+ tag1 tag2 tag3 ...
 
-Options:
+Options:  
   -n=VALUE, --node=VALUE
-        
+    
         Remote computer name (optional)
         
   -s=VALUE, --server=VALUE
@@ -85,11 +101,11 @@ Options:
 
   --from=VALUE, --start=VALUE, --begin=VALUE
 
-        Start time (abs. or relative), default NOW-1H
+        Start time (abs. or relative), default is NOW-1H
 
   --to=VALUE, --end=VALUE
     
-        End time (abs. or relative), default NOW
+        End time (abs. or relative), default is NOW
 
   -a=VALUE, --agg=VALUE
   

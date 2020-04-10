@@ -31,14 +31,18 @@ using System.IO;
  * + check if 'MaxValues' work. If not - delete it.
  * + trying to get data for the whole month - E_MAXEXCEEDED
  * + remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
- * partition the program to separate modules/classes...
+ * + partition the program to separate modules/classes...
+ * + check and rewise exceptions vs. error codes
  * write to file portion by portion to conserve memory...
- * check and rewise exceptions vs. error codes
  * better merge algorithm?
  * if output file already exists: overwrite or do nothing
+ * specify decimal point symbol and value separator
+ * check if program works with string tags
  * omit value if NODATA quality
- * shutdown event
+ * empty column if tag doesnt exist
+ * handle shutdown event
  * log to file?
+ * use job configuration file instead of specifying all parameters in command line
  * * */
 
 namespace HDARead {
@@ -100,23 +104,22 @@ namespace HDARead {
                     Console.WriteLine("HDARead unable to connect to OPC server.");
                 }
                 if (!res) {
-                    Console.WriteLine("HDARead Error.");
+                    Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error reading data.");
                     return;
                 }
             } catch (Exception e) {
-                Console.WriteLine(e.Message);
+                _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
                 return;
             } finally {
                 srv.Disconnect();
             }
 
             if (OPCHDAItemValues == null) {
-                Console.WriteLine("HDARead returned null.");
+                _trace.TraceEvent(TraceEventType.Verbose, 0, "HDARead returned null.");
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Yellow, "HDARead returned null.");
                 return;
             } else {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("HDARead OK.");
-                Console.ResetColor();
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Green, "Data read OK.");
             }
 
             try {
@@ -136,9 +139,10 @@ namespace HDARead {
                 out_writer.Write(OPCHDAItemValues);
                 out_writer.Close();
             } catch (Exception e) {
-                Console.WriteLine(e.Message);
+                _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error writing output data.");
                 return;
-            } //finally close? or everything is already done inside out_writer?
+            } 
             return;
         }
 
@@ -156,7 +160,7 @@ namespace HDARead {
                                                                                 v => ResampleInterval = Int32.Parse(v)},
                 { "raw",                    "Read raw data (if omitted, read processed data) ",  
                                                                                 v => ReadRaw = v != null},
-                { "m=|maxvalues=",          "Maximum number of values to load (only for raw data)", 
+                { "m=|maxvalues=",          "Maximum number of values to load (only for ReadRaw)", 
                                                                                 v => MaxValues = Int32.Parse(v)},
                 { "b|bounds",               "Whether the bounding item values should be returned (only for ReadRaw).",  
                                                                                 v => IncludeBounds = v != null},
@@ -255,7 +259,6 @@ namespace HDARead {
             }
 
         }
-
 
         static void ShowHelp() {
             Console.WriteLine("Usage: HDARead OPTIONS tag1 tag2 tag3");
