@@ -98,8 +98,20 @@ namespace HDARead {
                 if (srv.Connect(Host, Server)) {
                     // Remove unknown items from the list
                     srv.Validate(Tagnames);
-                    // Read items using the Hda.Server class.
-                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out OPCHDAItemValues);
+                    // Create OutputWriter
+                    OutputWriter out_writer;
+                    switch (OutputFormat) {
+                        case eOutputFormat.MERGED:
+                            out_writer = new MergedOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                            break;
+                        case eOutputFormat.TABLE:
+                            out_writer = new TableOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                            break;
+                        default:
+                            throw (new ArgumentException("Unknown output format"));
+                    }
+                    // Read items 
+                    res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out_writer, out OPCHDAItemValues);
                 } else {
                     Console.WriteLine("HDARead unable to connect to OPC server.");
                 }
@@ -109,40 +121,12 @@ namespace HDARead {
                 }
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error reading data.");
                 return;
             } finally {
                 srv.Disconnect();
             }
-
-            if (OPCHDAItemValues == null) {
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "HDARead returned null.");
-                Utils.ConsoleWriteColoredLine(ConsoleColor.Yellow, "HDARead returned null.");
-                return;
-            } else {
-                Utils.ConsoleWriteColoredLine(ConsoleColor.Green, "Data read OK.");
-            }
-
-            try {
-                OutputWriter out_writer;
-                switch (OutputFormat) {
-                    case eOutputFormat.MERGED:
-                        out_writer = new MergedOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
-                        break;
-                    case eOutputFormat.TABLE:
-                        out_writer = new TableOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
-                        break;
-                    default:
-                        throw(new ArgumentException("Unknown output format"));
-                }
-                
-                out_writer.WriteHeader(OPCHDAItemValues);
-                out_writer.Write(OPCHDAItemValues);
-                out_writer.Close();
-            } catch (Exception e) {
-                _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
-                Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error writing output data.");
-                return;
-            } 
+            Utils.ConsoleWriteColoredLine(ConsoleColor.Green, "Data read OK.");
             return;
         }
 

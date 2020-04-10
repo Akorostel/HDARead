@@ -44,9 +44,7 @@ namespace HDARead {
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during creating OutputWriter:" + e.ToString());
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
+                Close();
                 throw;
             }
         }
@@ -98,9 +96,7 @@ namespace HDARead {
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output header:" + e.ToString());
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
+                Close();
                 throw;
             }
         }
@@ -140,18 +136,15 @@ namespace HDARead {
                 }
 
                 if (!string.IsNullOrEmpty(_OutputFileName)) {
-                    Console.WriteLine("Data were written to file {0}.", _OutputFileName);
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Data were written to file {0}.", _OutputFileName);
                 }
                 return;
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output:" + e.ToString());
+                Close();
                 throw;
-            } finally {
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
-            }
+            } 
         }
     }
 
@@ -192,9 +185,7 @@ namespace HDARead {
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output header:" + e.ToString());
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
+                Close();
                 throw;
             }
         }
@@ -243,17 +234,14 @@ namespace HDARead {
                 }
 
                 if (!string.IsNullOrEmpty(_OutputFileName)) {
-                    Console.WriteLine("Data were written to file {0}.", _OutputFileName);
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Data were written to file {0}.", _OutputFileName);
                 }
                 return;
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output:" + e.ToString());
+                Close();
                 throw;
-            } finally {
-                if (!string.IsNullOrEmpty(_OutputFileName) && (_writer != null)) {
-                    _writer.Close();
-                }
             }
         }
     }

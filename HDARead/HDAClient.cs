@@ -149,6 +149,8 @@ namespace HDARead {
         }
 
         // This method uses Opc.Hda.Server class to read data
+        // If OutWriter is specified, it is applied to data that were read.
+        // In this case OPCHDAItemValues is NOT returned, to save memory. 
         public bool Read(string strStartTime,
                          string strEndTime,
                          string[] Tagnames,
@@ -157,6 +159,7 @@ namespace HDARead {
                          int ResampleInterval,
                          bool IncludeBounds,
                          bool read_raw,
+                         OutputWriter OutWriter,
                          out Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
 
             if ((Tagnames == null) || (Tagnames.Count() == 0)) {
@@ -194,6 +197,7 @@ namespace HDARead {
             if (dtStartTime > dtEndTime)
                 order = -1;
 
+            Opc.Hda.ItemValueCollection[] tmpOPCHDAItemValues = null;
             OPCHDAItemValues = null;
 
             try {
@@ -202,15 +206,19 @@ namespace HDARead {
                         _trace.TraceEvent(TraceEventType.Warning, 0, "MaxValue was set to {0} (server cannot return more).", Status.MaxReturnValues);
                         MaxValues = Status.MaxReturnValues;
                     }
-                    OPCHDAItemValues = _OPCServer.ReadRaw(hdaStartTime, hdaEndTime, MaxValues, IncludeBounds, ItemIDResults);
-                } else {
+                    tmpOPCHDAItemValues = _OPCServer.ReadRaw(hdaStartTime, hdaEndTime, MaxValues, IncludeBounds, ItemIDResults);
+                    if (OutWriter != null) {
+                        OutWriter.WriteHeader(tmpOPCHDAItemValues);
+                        OutWriter.Write(tmpOPCHDAItemValues);
+                    } else {
+                        OPCHDAItemValues = tmpOPCHDAItemValues;
+                    }
+                } else { // ReadProcessed
                     var Items = new Opc.Hda.Item[Tagnames.Count()];
                     for (int i = 0; i < Tagnames.Count(); i++) {
                         Items[i] = new Opc.Hda.Item(ItemIDResults[i]);
                         Items[i].AggregateID = AggregateID;
                     }
-
-                    Opc.Hda.ItemValueCollection[] tmpOPCHDAItemValues;
 
                     // Server returns data including start datetime, excluding last datetime: [dtStartPortion, dtEndPortion)
                     DateTime dtStartPortion = dtStartTime;
@@ -233,15 +241,23 @@ namespace HDARead {
 
                         if (dtStartPortion.Equals(dtStartTime)) {
                             // if it was a first call
-                            OPCHDAItemValues = tmpOPCHDAItemValues;
+                            if (OutWriter != null) {
+                                OutWriter.WriteHeader(tmpOPCHDAItemValues);
+                                OutWriter.Write(tmpOPCHDAItemValues);
+                            } else {
+                                OPCHDAItemValues = tmpOPCHDAItemValues;
+                            }
                         } else {
-                            for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
-                                OPCHDAItemValues[i].AddRange(tmpOPCHDAItemValues[i]);
+                            if (OutWriter != null) {
+                                OutWriter.Write(tmpOPCHDAItemValues);
+                            } else {
+                                for (int i = 0; i < tmpOPCHDAItemValues.Count(); i++)
+                                    OPCHDAItemValues[i].AddRange(tmpOPCHDAItemValues[i]);
+                            }
                         }
                         dtStartPortion = dtEndPortion;
                     }
                 }
-
                 if (OPCHDAItemValues != null) {
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of tags = OPCHDAItemValues.Count()={0}", OPCHDAItemValues.Count());
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "Number of values for the first tag = OPCHDAItemValues[0].Count={0}",
@@ -251,10 +267,10 @@ namespace HDARead {
             } catch (Opc.ResultIDException e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Opc.ResultIDException:" + e.ToString());
                 // anyway, let's try to examine data
-                if (OPCHDAItemValues == null) {
-                    _trace.TraceEvent(TraceEventType.Error, 0, "OPCHDAItemValues == null");
+                if (tmpOPCHDAItemValues == null) {
+                    _trace.TraceEvent(TraceEventType.Error, 0, "tmpOPCHDAItemValues == null");
                 } else {
-                    foreach (Opc.Hda.ItemValueCollection item in OPCHDAItemValues) {
+                    foreach (Opc.Hda.ItemValueCollection item in tmpOPCHDAItemValues) {
                         _trace.TraceEvent(TraceEventType.Error, 0, "For tag {0}  the ResultID is {1}", item.ItemName, item.ResultID.ToString());
                     }
                 }
@@ -278,6 +294,8 @@ namespace HDARead {
                         _trace.TraceEvent(TraceEventType.Error, 0, "Tag {0} couldn't be released! Result_ID={1}", Tagnames[i], ItemIDResults[i].ResultID.ToString());
                     }
                 }
+                if (OutWriter != null)
+                    OutWriter.Close();
             }
         }
 
