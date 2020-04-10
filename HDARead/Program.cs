@@ -5,35 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 
 using NDesk.Options;
-
 using Opc;
 using OpcCom;
-
 using System.Diagnostics;
-//using Microsoft.VisualBasic.Logging;
-
 using System.IO;
+using System.Reflection;
 
 /* TODO:
- * +aggregate enum
- * +resample interval
- * +file output
- * +read raw
- * +input file with tag list
- * + why we use OPCTrend and not OPCServer read method
- * + maybe its better to query data tag by tag (because 'tag not found' exception doesn't show which tag is wrong)
- * +   or maybe validate tags before read and delete them from query?
- * +command line parameter to display output quality or not
- * +command line parameter to 'merged' output format (single timestamp column for all tags)
- * + OutputTable: What if different tags have different number of points?!
- * + header is shifted by one column in TABLE mode
- * + option to toggle debug output
- * + check if 'MaxValues' work. If not - delete it.
- * + trying to get data for the whole month - E_MAXEXCEEDED
- * + remember that timestamps may be in reverse order. Currently this will crash 'Merge' algorithm and may be something else
- * + partition the program to separate modules/classes...
- * + check and rewise exceptions vs. error codes
- * write to file portion by portion to conserve memory...
  * better merge algorithm?
  * if output file already exists: overwrite or do nothing
  * specify decimal point symbol and value separator
@@ -81,6 +59,7 @@ namespace HDARead {
         static TraceSource _trace = new TraceSource("ConsoleApplicationTraceSource");
 
         static void Main(string[] args) {
+            Console.WriteLine("HDARead v. " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
 
             if (!ParseCommandLine(args)) {
                 return;
@@ -162,7 +141,6 @@ namespace HDARead {
                 { "<>",                     "List of tag names",                v => Tagnames.Add (v)},
             };
 
-            Console.Write("HDARead: ");
             try {
                 p.Parse(args);
             } catch (OptionException e) {
@@ -209,10 +187,15 @@ namespace HDARead {
                     Console.WriteLine("If the input file is specified, no tags may be entered as command line argument");
                     return false;
                 }
-                // try catch !!!
-                Tagnames = File.ReadLines(InputFileName).ToList();
-                if (Tagnames.Count() < 1) {
-                    Console.WriteLine("No tagnames were specified.");
+                try {
+                    Tagnames = File.ReadLines(InputFileName).ToList();
+                    if (Tagnames.Count() < 1) {
+                        Console.WriteLine("No tagnames were specified.");
+                        return false;
+                    }
+                } catch (Exception e) {
+                    _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
+                    Console.WriteLine("Error reading tags from file: " + e.Message);
                     return false;
                 }
             }
