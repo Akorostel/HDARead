@@ -51,6 +51,7 @@ namespace HDARead {
         static bool ReadRaw = false;
         static bool Help = false;
         static bool Verbose = false;
+        static bool ExtendedInfo = false;
         static eOutputQuality OutputQuality = eOutputQuality.NONE;
         static eOutputFormat OutputFormat = eOutputFormat.MERGED;
         static List<string> Tagnames = new List<string>();
@@ -59,7 +60,8 @@ namespace HDARead {
         static TraceSource _trace = new TraceSource("ConsoleApplicationTraceSource");
 
         static void Main(string[] args) {
-            Console.WriteLine("HDARead v. " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            if (ExtendedInfo)
+                Console.WriteLine("HDARead v. " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
 
             if (!ParseCommandLine(args)) {
                 return;
@@ -67,7 +69,8 @@ namespace HDARead {
             if (!CheckOptions()) {
                 return;
             }
-            ShowInfo();
+            if (ExtendedInfo) 
+                ShowInfo();
 
             var srv = new HDAClient(_trace.Switch);
 
@@ -137,7 +140,8 @@ namespace HDARead {
                                                                                 v => OutputFileName = v},
                 { "i=|input=",              "Input filename with list of tags (if omitted, tag list must be provided as command line argument)",   
                                                                                 v => InputFileName = v},
-                { "v|verbose",              "Output debug info",                v => Verbose = v != null},
+                { "v",                      "Show extended info",               v => ExtendedInfo = v != null},
+                { "vv|verbose",             "Show debug info",                  v => Verbose = v != null},
                 { "h|?|help",               "Show help",                        v => Help = v != null},
                 { "<>",                     "List of tag names",                v => Tagnames.Add (v)},
             };
@@ -222,8 +226,20 @@ namespace HDARead {
             else
                 Console.WriteLine("\t The resulting data will be output to console.", OutputFileName);
             Console.WriteLine("\t The list of requested tags:");
-            foreach (string t in Tagnames) {
-                Console.WriteLine("\t\t" + t);
+
+            if (Verbose || Tagnames.Count<10) {
+                foreach (string t in Tagnames) {
+                    Console.WriteLine("\t\t" + t);
+                }
+            } else {
+                int n = Tagnames.Count;
+                for (int i = 0; i < 3; i++) {
+                    Console.WriteLine("\t\t" + Tagnames[i]);
+                }
+                Console.WriteLine("\t\t..." );
+                for (int i = n-3; i < n; i++) {
+                    Console.WriteLine("\t\t" + Tagnames[i]);
+                }
             }
 
         }

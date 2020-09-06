@@ -203,7 +203,7 @@ namespace HDARead {
             try {
                 if (read_raw) {
                     if (MaxValues > Status.MaxReturnValues) {
-                        _trace.TraceEvent(TraceEventType.Warning, 0, "MaxValue was set to {0} (server cannot return more).", Status.MaxReturnValues);
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "MaxValue was set to {0} (server cannot return more).", Status.MaxReturnValues);
                         MaxValues = Status.MaxReturnValues;
                     }
                     tmpOPCHDAItemValues = _OPCServer.ReadRaw(hdaStartTime, hdaEndTime, MaxValues, IncludeBounds, ItemIDResults);
