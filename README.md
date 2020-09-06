@@ -84,6 +84,7 @@ When querying *raw* data from server, server returns individual set of timestamp
 There is also an option `-q` to include in the output the quality for each tag.
 
 Output timestamp format ("yyyy-MM-dd hh:mm:ss", "MM/dd/yy hh:mm", etc.) can be specified by using `-t` key. For details on format strings see [1](https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings), [2](https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings)
+One special format string is -t=DateTime, which outputs date and time in separate columns. The format is fixed: MM/dd/yyyy,HH:mm:ss
  
 Arguments
 ---------

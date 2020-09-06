@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 
 namespace HDARead {
     abstract public class OutputWriter {
@@ -79,13 +80,17 @@ namespace HDARead {
 
         public override void WriteHeader(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             try {
-                _writer.Write("Timestamp");
-                string hdr = ", {0}";
+                if (_OutputTimestampFormat == "DateTime")
+                    _writer.Write("Date,Time");
+                else
+                    _writer.Write("Timestamp");
+
+                string hdr = ",{0}";
                 if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH)) {
-                    hdr += ", {0} da quality";
+                    hdr += ",{0} da quality";
                 }
                 if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH)) {
-                    hdr += ", {0} hist quality";
+                    hdr += ",{0} hist quality";
                 }
                 // header
                 for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
@@ -109,27 +114,32 @@ namespace HDARead {
                 }
 
                 for (int j = 0; j < OPCHDAItemValues[0].Count; j++) {
-                    _writer.Write("{0}", Utils.GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, _OutputTimestampFormat));
+                    if (_OutputTimestampFormat == "DateTime")
+                        _writer.Write("{0},{1}",
+                            OPCHDAItemValues[0][j].Timestamp.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture),
+                            OPCHDAItemValues[0][j].Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+                    else
+                        _writer.Write("{0}", Utils.GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, _OutputTimestampFormat));
                     for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
                         // Maybe its better to catch exception (null ref) than to check every element
                         if (OPCHDAItemValues[i][j].Value == null) {
                             _writer.Write(", ");
                         } else {
-                            _writer.Write(", {0}", OPCHDAItemValues[i][j].Value.ToString());
+                            _writer.Write(",{0}", OPCHDAItemValues[i][j].Value.ToString());
                         }
 
                         if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH)) {
                             if (OPCHDAItemValues[i][j].Quality == null) {
-                                _writer.Write(", ");
+                                _writer.Write(",");
                             } else {
-                                _writer.Write(", {0}", OPCHDAItemValues[i][j].Quality.ToString());
+                                _writer.Write(",{0}", OPCHDAItemValues[i][j].Quality.ToString());
                             }
                         }
 
                         if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH)) {
                             // OPC.DA.Quality is struct, but OPC.HDA.Quality is enum.
                             // Enum cannot be null, so there is no need to check
-                            _writer.Write(", {0}", OPCHDAItemValues[i][j].HistorianQuality.ToString());
+                            _writer.Write(",{0}", OPCHDAItemValues[i][j].HistorianQuality.ToString());
                         }
                     }
                     _writer.WriteLine();
@@ -166,7 +176,11 @@ namespace HDARead {
 
         public override void WriteHeader(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             try {
-                string hdr = "Timestamp, {0}";
+                string hdr;
+                if (_OutputTimestampFormat == "DateTime")
+                    hdr = "Date,Time,{0}";
+                else
+                    hdr = "Timestamp,{0}";
 
                 if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH)) {
                     hdr += ", {0} da quality";
@@ -174,10 +188,10 @@ namespace HDARead {
                 if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH)) {
                     hdr += ", {0} hist quality";
                 }
-                // header
+
                 _writer.Write(hdr, OPCHDAItemValues[0].ItemName);
                 for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                    _writer.Write(", ");
+                    _writer.Write(",");
                     _writer.Write(hdr, OPCHDAItemValues[i].ItemName);
                 }
                 _writer.WriteLine();
@@ -192,37 +206,41 @@ namespace HDARead {
 
         public override void Write(Opc.Hda.ItemValueCollection[] OPCHDAItemValues) {
             try {
-                string valstr = "{0},{1}";
-                string emptystr = ",";
+                string valstr = ",{0}";
+                string emptystr;
+                if (_OutputTimestampFormat == "DateTime")
+                    emptystr = ",,";
+                else
+                    emptystr = ",";
 
                 if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH)) {
-                    valstr += ",{2}";
+                    valstr += ",{1}";
                     emptystr += ",";
                 }
                 if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH)) {
-                    valstr += ",{3}";
+                    valstr += ",{2}";
                     emptystr += ",";
                 }
 
                 // What if different tags have different number of points?!
+                // This shouldn't be possible.
                 int max_rows = OPCHDAItemValues.Max(x => x.Count);
-                /*
-                int max_rows = OPCHDAItemValues[0].Count;
-                for (int i = 1; i < OPCHDAItemValues.Count(); i++) {
-                    if (max_rows < OPCHDAItemValues[i].Count) {
-                        max_rows = OPCHDAItemValues[i].Count;
-                    }
-                }
-                */
 
                 for (int j = 0; j < max_rows; j++) {
                     for (int i = 0; i < OPCHDAItemValues.Count(); i++) {
                         if (i > 0) {
-                            _writer.Write(", ");
+                            _writer.Write(",");
                         }
+
                         if (j < OPCHDAItemValues[i].Count) {
+                            if (_OutputTimestampFormat == "DateTime")
+                                _writer.Write("{0},{1}",
+                                    OPCHDAItemValues[0][j].Timestamp.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture),
+                                    OPCHDAItemValues[0][j].Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+                            else
+                                _writer.Write("{0}", Utils.GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, _OutputTimestampFormat));
+
                             _writer.Write(valstr,
-                                Utils.GetDatetimeStr(OPCHDAItemValues[i][j].Timestamp, _OutputTimestampFormat),
                                 OPCHDAItemValues[i][j].Value.ToString(),
                                 OPCHDAItemValues[i][j].Quality.ToString(),
                                 OPCHDAItemValues[i][j].HistorianQuality.ToString());
