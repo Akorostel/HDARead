@@ -148,12 +148,22 @@ Options:
   
         Input filename with list of tags (if omitted, tag list must be provided as command line argument)
         
-   -v, --verbose
+  -v
    
-        Output debug info
+        Show extended info
+
+
+  -vv, --verbose
+   
+        Show debug info
         
   -h, -?, --help
 
         Show usage info
 
 
+Third-party libraries used in this product
+-----------------------------------------
+This product uses the following software:
+ - [NDesk Options:  Copyright (C) 2008 Novell](http://www.ndesk.org/Options)
+ - [OPC Redistributables](https://opcfoundation.org/developer-tools/samples-and-tools-classic/core-components/)

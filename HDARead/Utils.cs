@@ -57,5 +57,20 @@ namespace HDARead {
             Console.WriteLine(value);
             Console.ForegroundColor = originalForegroundColor;
         }
+
+        static public void ListHDAServers(String node) {
+            IDiscovery discovery = new OpcCom.ServerEnumerator();
+            Opc.Server[] servers;
+
+            if (string.IsNullOrEmpty(node)) 
+                servers = discovery.GetAvailableServers(Specification.COM_HDA_10);
+            else
+                servers = discovery.GetAvailableServers(Specification.COM_HDA_10, node, null);
+
+            foreach (Opc.Server s in servers) {
+                Console.WriteLine(s.Name);
+            }
+        }
+
     }
 }

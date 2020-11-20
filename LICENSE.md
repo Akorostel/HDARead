@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Third-party libraries used in this product
+-----------------------------------------
+This product uses the following software:
+ - [NDesk Options:  Copyright (C) 2008 Novell](http://www.ndesk.org/Options)
+ - [OPC Redistributables](https://opcfoundation.org/developer-tools/samples-and-tools-classic/core-components/)

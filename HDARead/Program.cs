@@ -60,18 +60,16 @@ namespace HDARead {
         static TraceSource _trace = new TraceSource("ConsoleApplicationTraceSource");
 
         static void Main(string[] args) {
-            if (ExtendedInfo)
-                Console.WriteLine("HDARead v. " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
-
             if (!ParseCommandLine(args)) {
                 return;
             }
             if (!CheckOptions()) {
                 return;
             }
-            if (ExtendedInfo) 
+            if (ExtendedInfo) {
+                Console.WriteLine("HDARead v. " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
                 ShowInfo();
-
+            }
             var srv = new HDAClient(_trace.Switch);
 
             Opc.Hda.ItemValueCollection[] OPCHDAItemValues = null;
@@ -95,7 +93,7 @@ namespace HDARead {
                     // Read items 
                     res = srv.Read(StartTime, EndTime, Tagnames.ToArray(), Aggregate, MaxValues, ResampleInterval, IncludeBounds, ReadRaw, out_writer, out OPCHDAItemValues);
                 } else {
-                    Console.WriteLine("HDARead unable to connect to OPC server.");
+                    Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "HDARead unable to connect to OPC server.");
                 }
                 if (!res) {
                     Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error reading data.");
@@ -149,7 +147,7 @@ namespace HDARead {
             try {
                 p.Parse(args);
             } catch (OptionException e) {
-                Console.WriteLine(e.Message);
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Red, e.Message);
                 Console.WriteLine("Try `HDARead --help' for more information.");
                 return false;
             }
@@ -178,29 +176,31 @@ namespace HDARead {
             }
 
             if (string.IsNullOrEmpty(Server)) {
-                Console.WriteLine("Missing required option s=|server=");
+                Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Missing required option s=|server=");
+                Console.WriteLine("Available servers are:");
+                Utils.ListHDAServers(Host);
                 return false;
             }
 
             if (string.IsNullOrEmpty(InputFileName)) {
                 if (Tagnames.Count() < 1) {
-                    Console.WriteLine("No tagnames were specified.");
+                    Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "No tagnames were specified.");
                     return false;
                 }
             } else {
                 if (Tagnames.Count() > 0) {
-                    Console.WriteLine("If the input file is specified, no tags may be entered as command line argument");
+                    Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "If the input file is specified, no tags may be entered as command line argument");
                     return false;
                 }
                 try {
                     Tagnames = File.ReadLines(InputFileName).ToList();
                     if (Tagnames.Count() < 1) {
-                        Console.WriteLine("No tagnames were specified.");
+                        Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "No tagnames were specified.");
                         return false;
                     }
                 } catch (Exception e) {
                     _trace.TraceEvent(TraceEventType.Error, 0, e.Message);
-                    Console.WriteLine("Error reading tags from file: " + e.Message);
+                    Utils.ConsoleWriteColoredLine(ConsoleColor.Red, "Error reading tags from file: " + e.Message);
                     return false;
                 }
             }
