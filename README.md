@@ -9,23 +9,23 @@ Examples
 --------
 
 ~~~~
-HDARead.exe -s=PHDServerHDA.1" $TEST.TEST2.QQ.LOLIM
+HDARead.exe -s=OPCServerHDA.1 Tag1
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=START -r=600 $TEST.TEST2.QQ.LOLIM
+HDARead.exe -s=OPCServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=START -r=600 Tag1
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.INPUT
+HDARead.exe -s=OPCServerHDA.1 -from="09/17/19 11:00 AM" -to=NOW -a=INTERPOLATIVE -r=600 Tag1 Tag2
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
+HDARead.exe -s=OPCServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 Tag1 Tag2 > out.txt
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM > out.txt
+HDARead.exe -s=OPCServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" Tag1 Tag2 > out.txt
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.txt"
+HDARead.exe -s=OPCServerHDA.1 -from="09/17/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f="yyyy-MM-dd HH-mm-ss" Tag1 Tag2 -o="out.txt"
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM -o="out.csv"
+HDARead.exe -s=OPCServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE Tag1 Tag2 -o="out.csv"
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE -i=tags.txt -o="out.csv"
+HDARead.exe -s=OPCServerHDA.1 -from="09/19/19 15:00" -to=NOW -a=INTERPOLATIVE -r=600 -f=TABLE -i=tags.txt -o="out.csv"
 
-HDARead.exe -s=OPC.PHDServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -raw  -f=TABLE $TEST.TEST2.QQ.LOLIM $TEST.TEST2.QQ.HILIM TEST.DATA.MI2
+HDARead.exe -s=OPCServerHDA.1 -from="09/24/19 10:00" -to="09/24/19 18:00" -raw  -f=TABLE Tag1 Tag2 Tag3
 ~~~~
 
 Start and end time format
@@ -70,7 +70,7 @@ Aggregates
 Output formats: TABLE, MERGED
 -----------------------------
 
-HDAread can show queried data on console (if no `-o`key specified) or save them to text file (CSV - comma separated value). 
+HDAread can show queried data on console (if no `-o` key specified) or save them to text file (CSV - comma separated value). 
 
 There are two output formats supported: TABLE and MERGED.  
 TABLE formatting looks like the following:  
