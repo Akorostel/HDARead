@@ -2,11 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 using NDesk.Options;
-using Opc;
-using OpcCom;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -28,7 +25,8 @@ namespace HDARead {
     public enum eOutputFormat {
         LIST = 1,
         TABLE = 2,
-        MERGED = 3
+        MERGED = 3,
+        RECORD = 4
     }
     public enum eOutputQuality {
         NONE = 0,
@@ -87,6 +85,9 @@ namespace HDARead {
                         case eOutputFormat.TABLE:
                             out_writer = new TableOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
                             break;
+                        case eOutputFormat.RECORD:
+                            out_writer = new RecordOutputWriter(OutputFormat, OutputQuality, OutputFileName, OutputTimestampFormat, ReadRaw, _trace.Switch.Level);
+                            break;
                         default:
                             throw (new ArgumentException("Unknown output format"));
                     }
@@ -130,7 +131,7 @@ namespace HDARead {
                                                                                 v => IncludeBounds = v != null},
                 { "t=|tsformat=",           "Output timestamp format to use. You can use -t=DateTime to output date and time in separate columns",  
                                                                                 v => OutputTimestampFormat = v},
-                { "f=",                     "Output format (TABLE or MERGED)",   
+                { "f=",                     "Output format (TABLE, MERGED or RECORD)",   
                                                                                 v => OutputFormat = Utils.GetOutputFormat(v)},
                 { "q=",                     "Include quality in output data (NONE, DA, HISTORIAN or BOTH)",   
                                                                                 v => OutputQuality = Utils.GetOutputQuality(v)},

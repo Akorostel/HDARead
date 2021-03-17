@@ -241,7 +241,7 @@ namespace HDARead {
                                 _writer.Write("{0}", Utils.GetDatetimeStr(OPCHDAItemValues[0][j].Timestamp, _OutputTimestampFormat));
 
                             _writer.Write(valstr,
-                                OPCHDAItemValues[i][j].Value.ToString(),
+                                ((OPCHDAItemValues[i][j].Value == null) ? "" : OPCHDAItemValues[i][j].Value.ToString()),
                                 OPCHDAItemValues[i][j].Quality.ToString(),
                                 OPCHDAItemValues[i][j].HistorianQuality.ToString());
                         } else {
@@ -258,6 +258,99 @@ namespace HDARead {
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output:" + e.ToString());
+                Close();
+                throw;
+            }
+        }
+    }
+
+    // Output format: record
+	// timestamp1, tag1, ts1_tag1_value
+	// timestamp1, tag2, ts1_tag2_value
+	// timestamp2, tag1, ts2_tag1_value
+	// timestamp3, tag2, ts3_tag2_value
+    // ...
+    public class RecordOutputWriter : OutputWriter
+    {
+        public RecordOutputWriter(eOutputFormat OutputFormat,
+                    eOutputQuality OutputQuality,
+                    string OutputFileName,
+                    string OutputTimestampFormat,
+                    bool ReadRaw,
+                    SourceLevels swlvl = SourceLevels.Information) : base(OutputFormat,
+                                                                          OutputQuality,
+                                                                          OutputFileName,
+                                                                          OutputTimestampFormat,
+                                                                          ReadRaw,
+                                                                          swlvl)
+        { }
+
+        public override void Write(Opc.Hda.ItemValueCollection[] OPCHDAItemValues)
+        {
+            try
+            {
+                string valstr = ",{0}";
+                if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH))
+                    valstr += ",{1}";
+                if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH))
+                    valstr += ",{2}";
+                foreach (Opc.Hda.ItemValueCollection tagValues in OPCHDAItemValues)
+                {
+                    foreach (Opc.Hda.ItemValue tagValue in tagValues)
+                    {
+                        if (_OutputTimestampFormat == "DateTime")
+                            _writer.Write("{0},{1}",
+                                tagValue.Timestamp.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture),
+                                tagValue.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+                        else
+                            _writer.Write("{0}", Utils.GetDatetimeStr(tagValue.Timestamp, _OutputTimestampFormat));
+                        _writer.Write(",{0}", tagValues.ItemName);
+                        _writer.Write(valstr,
+                            ((tagValue.Value == null) ? "" : tagValue.Value.ToString()),
+                            tagValue.Quality.ToString(),
+                            tagValue.HistorianQuality.ToString());
+                        _writer.WriteLine();
+                    }
+                }
+                if (!string.IsNullOrEmpty(_OutputFileName))
+                {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "Data were written to file {0}.", _OutputFileName);
+                }
+            }
+            catch (Exception e)
+            {
+                _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output:" + e.ToString());
+                Close();
+                throw;
+            }
+        }
+
+        public override void WriteHeader(Opc.Hda.ItemValueCollection[] OPCHDAItemValues)
+        {
+            try
+            {
+                string hdr;
+                if (_OutputTimestampFormat == "DateTime")
+                    hdr = "Date,Time";
+                else
+                    hdr = "Timestamp";
+                hdr += ",Tag,Value";
+                if ((_OutputQuality == eOutputQuality.DA) || (_OutputQuality == eOutputQuality.BOTH))
+                {
+                    hdr += ",DA quality";
+                }
+                if ((_OutputQuality == eOutputQuality.HISTORIAN) || (_OutputQuality == eOutputQuality.BOTH))
+                {
+                    hdr += ",Hist quality";
+                }
+                _writer.Write(hdr);
+                _writer.WriteLine();
+                return;
+
+            }
+            catch (Exception e)
+            {
+                _trace.TraceEvent(TraceEventType.Error, 0, "Exception during writing output header:" + e.ToString());
                 Close();
                 throw;
             }

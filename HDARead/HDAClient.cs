@@ -91,30 +91,36 @@ namespace HDARead {
                     }
                     _trace.TraceEvent(TraceEventType.Verbose, 0, "Succesfully connected to {0}, obj: {1}", url.ToString(), _OPCServer.GetHashCode().ToString());
                 }
-
-                Status = _OPCServer.GetStatus();
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server status:\n"+
-                    "\tCurrentTime:     {0}\n"+
-                    "\tMaxReturnValues: {1}\n" +
-                    "\tProductVersion:  {2}\n" +
-                    "\tServerState:     {3}\n" +
-                    "\tStartTime:       {4}\n" +
-                    "\tStatusInfo:      {5}\n" +
-                    "\tVendorInfo:      {6}\n", 
-                    Status.CurrentTime,
-                    Status.MaxReturnValues,
-                    Status.ProductVersion,
-                    Status.ServerState,
-                    Status.StartTime,
-                    Status.StatusInfo,
-                    Status.VendorInfo);
-
-                _trace.TraceEvent(TraceEventType.Verbose, 0, "SupportedAggregates:");
-                SupportedAggregates = _OPCServer.GetAggregates();
-                foreach (Opc.Hda.Aggregate agg in SupportedAggregates) {
-                    _trace.TraceEvent(TraceEventType.Verbose, 0, "{0}\t{1}\t{2}", agg.ID, agg.Name, agg.Description);
+                try {
+                    Status = _OPCServer.GetStatus();
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "OPC server status:\n" +
+                        "\tCurrentTime:     {0}\n" +
+                        "\tMaxReturnValues: {1}\n" +
+                        "\tProductVersion:  {2}\n" +
+                        "\tServerState:     {3}\n" +
+                        "\tStartTime:       {4}\n" +
+                        "\tStatusInfo:      {5}\n" +
+                        "\tVendorInfo:      {6}\n",
+                        Status.CurrentTime,
+                        Status.MaxReturnValues,
+                        Status.ProductVersion,
+                        Status.ServerState,
+                        Status.StartTime,
+                        Status.StatusInfo,
+                        Status.VendorInfo);
+                } catch (Exception e) {
+                    _trace.TraceEvent(TraceEventType.Warning, 0, "Can't get server status: {0}, {1}", url.ToString(), e.Message);
                 }
 
+                try {
+                    _trace.TraceEvent(TraceEventType.Verbose, 0, "SupportedAggregates:");
+                    SupportedAggregates = _OPCServer.GetAggregates();
+                    foreach (Opc.Hda.Aggregate agg in SupportedAggregates) {
+                        _trace.TraceEvent(TraceEventType.Verbose, 0, "{0}\t{1}\t{2}", agg.ID, agg.Name, agg.Description);
+                    }
+                } catch (Exception e) {
+                    _trace.TraceEvent(TraceEventType.Warning, 0, "Can't get server supported aggregates: {0}, {1}", url.ToString(), e.Message);
+                }
 
             } catch (Exception e) {
                 _trace.TraceEvent(TraceEventType.Error, 0, "Connection failed: {0}, {1}", url.ToString(), e.Message);
@@ -202,7 +208,7 @@ namespace HDARead {
 
             try {
                 if (read_raw) {
-                    if (MaxValues > Status.MaxReturnValues) {
+                    if ((Status != null) && (MaxValues > Status.MaxReturnValues)) {
                         _trace.TraceEvent(TraceEventType.Verbose, 0, "MaxValue was set to {0} (server cannot return more).", Status.MaxReturnValues);
                         MaxValues = Status.MaxReturnValues;
                     }
